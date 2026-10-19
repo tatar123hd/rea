@@ -1,0 +1,199 @@
+# =====================================================================
+# scrCalendar — ปฏิทินรายเดือน: รอบอบรม BAU + วันกำหนดส่งงาน
+# ---------------------------------------------------------------------
+# ใช้ gallery 42 ช่อง (6 สัปดาห์ x 7 วัน) เริ่มจากวันจันทร์ก่อนวันที่ 1 ของเดือน
+# ข้อมูลมาจาก colBauF และ colTasksF ที่โหลดไว้แล้ว  ถ้าช่วงที่โหลดไม่ครอบคลุมเดือนที่ดู
+# จะมีข้อความไทยเตือนให้กดปุ่ม "โหลดเดือนนี้" ซึ่งตั้งช่วงเวลาเป็นเดือนนั้นแล้วโหลดใหม่
+# =====================================================================
+Screens:
+  scrCalendar:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Calendar");
+         Set(gblCalMonth, Date(Year(gblAnchor), Month(gblAnchor), 1));
+         Set(gblCalFirstCell,
+             DateAdd(gblCalMonth, -(Weekday(gblCalMonth, StartOfWeek.Monday) - 1), TimeUnit.Days))
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Calendar"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: =Text(gblCalMonth, "mmmm yyyy", "en-US")
+            SubtitleText: ="แสดงรอบอบรม BAU ตามวันเริ่ม และงานตามวันกำหนดส่ง"
+            OnRefresh: =Select(cmpFilters_1)
+
+      - cmpFilters_1:
+          Control: Component
+          ComponentName: cmpFilters
+          Properties:
+            X: =uSidebarW
+            Y: =uHeaderH
+
+      - lblRangeWarn:
+          Control: Label
+          Properties:
+            Visible: =gblCalMonth < gblWinStartD || gblCalMonth > gblWinEndD
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uFilterH + 4
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =36
+            Text: ="เดือนที่กำลังดูอยู่นอกช่วงข้อมูลที่โหลดไว้ กดปุ่มช่วงเวลา ""รายเดือน"" แล้วกด ""ใช้ตัวกรอง"" เพื่อโหลดเดือนนี้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWarnText
+            Fill: =clrWarnBg
+            VerticalAlign: =VerticalAlign.Middle
+            PaddingLeft: =uPad
+
+      - galDow:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uFilterH + 44
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =36
+            TemplateSize: =(1366 - uSidebarW - (uPad * 2)) / 7
+            TemplatePadding: =0
+            ShowScrollbar: =false
+            Items: |
+              =Table({ D: "จันทร์" }, { D: "อังคาร" }, { D: "พุธ" }, { D: "พฤหัสบดี" },
+                     { D: "ศุกร์" }, { D: "เสาร์" }, { D: "อาทิตย์" })
+          Children:
+            - lblDow:
+                Control: Label
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =36
+                  Text: =ThisItem.D
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrTextMuted
+                  Align: =Align.Center
+                  VerticalAlign: =VerticalAlign.Middle
+
+      - galCells:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =galDow.Y + 40
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =768 - (galDow.Y + 40) - uPad
+            TemplateSize: =(768 - (galDow.Y + 40) - uPad) / 6
+            TemplatePadding: =0
+            WrapCount: =7
+            ShowScrollbar: =false
+            Items: |
+              =ForAll(Sequence(42) As s,
+                  {
+                      Idx:   s.Value,
+                      Day:   DateAdd(gblCalFirstCell, s.Value - 1, TimeUnit.Days),
+                      InMon: Month(DateAdd(gblCalFirstCell, s.Value - 1, TimeUnit.Days)) = Month(gblCalMonth)
+                  }
+               )
+          Children:
+            - recCell:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 2
+                  Height: =Parent.TemplateHeight - 2
+                  Fill: =If(ThisItem.InMon, clrSurface, ColorValue("#EDF0F6"))
+                  BorderColor: =If(ThisItem.Day = Today(), clrPrimary, clrBorder)
+                  BorderThickness: =If(ThisItem.Day = Today(), 3, 1)
+
+            - lblDayNo:
+                Control: Label
+                Properties:
+                  X: =8
+                  Y: =4
+                  Width: =60
+                  Height: =26
+                  Text: =Text(Day(ThisItem.Day))
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =If(ThisItem.Day = Today(), FontWeight.Bold, FontWeight.Normal)
+                  Color: =If(ThisItem.InMon, clrTextMain, clrTextMuted)
+
+            - galCellItems:
+                Control: Gallery
+                Variant: galleryVertical
+                Properties:
+                  X: =4
+                  Y: =30
+                  Width: =Parent.TemplateWidth - 12
+                  Height: =Parent.TemplateHeight - 36
+                  TemplateSize: =28
+                  TemplatePadding: =2
+                  ShowScrollbar: =true
+                  Items: |
+                    =With({ dd: ThisItem.Day },
+                        Ungroup(
+                            Table(
+                                { T: ForAll(
+                                       Filter(colBauF As b0,
+                                           DateValue(Text(b0.StartDate, "[$-en-US]yyyy-mm-dd")) = dd) As b,
+                                       {
+                                           Lbl:  b.Title,
+                                           Clr:  Coalesce(LookUp(colAreaColors, CourseArea = b.CourseArea, Color), clrNavy),
+                                           Kind: "BAU",
+                                           Rid:  b.ID
+                                       }) },
+                                { T: ForAll(
+                                       Filter(colTasksF As t0,
+                                           DateValue(Text(t0.DueDate, "[$-en-US]yyyy-mm-dd")) = dd) As t,
+                                       {
+                                           Lbl:  t.Title,
+                                           Clr:  Coalesce(LookUp(tblStatus, Key = t.StatusKey, Color), clrStNotStarted),
+                                           Kind: "Task",
+                                           Rid:  t.ID
+                                       }) }
+                            ),
+                            "T"
+                        )
+                     )
+                Children:
+                  - lblCellItem:
+                      Control: Label
+                      Properties:
+                        X: =0
+                        Y: =0
+                        Width: =Parent.TemplateWidth
+                        Height: =26
+                        Text: =ThisItem.Lbl
+                        Font: =fntMain
+                        Size: =szBody
+                        Color: =clrWhite
+                        Fill: =ThisItem.Clr
+                        PaddingLeft: =6
+                        VerticalAlign: =VerticalAlign.Middle
+                        AccessibleLabel: |
+                          =If(ThisItem.Kind = "BAU", "อบรม ", "งาน ") & ThisItem.Lbl

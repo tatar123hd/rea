@@ -1,0 +1,487 @@
+# =====================================================================
+# scrSkills — ทักษะและความสนใจ
+# ---------------------------------------------------------------------
+# ค้นหาด้วย StartsWith (delegate ได้) ไม่ใช้ Search() ซึ่ง delegate ไม่ได้บน SharePoint
+# สิทธิ์: ทุกคนดูได้  เฉพาะ AppAdmins แก้ไข/เพิ่ม/ลบได้ (คุมด้วย DisplayMode + Visible)
+#         และที่ SharePoint ลิสต์นี้ให้สิทธิ์ Edit เฉพาะกลุ่ม PP_Admins
+# =====================================================================
+Screens:
+  scrSkills:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Skills");
+         Select(btnSearchSkill)
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Skills"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="ทักษะและความสนใจ"
+            SubtitleText: |
+              =If(gblIsAdmin,
+                  "คุณเป็นผู้ดูแล จึงเพิ่ม แก้ไข และลบได้",
+                  "ดูได้อย่างเดียว การแก้ไขทำได้โดยผู้ดูแลระบบเท่านั้น")
+            OnRefresh: =Select(btnSearchSkill)
+
+      - txtSkillSearch:
+          Control: Classic/TextInput
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad
+            Width: =360
+            Height: =uTap
+            HintText: ="ค้นหาชื่อทักษะ (ขึ้นต้นด้วย...)"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ค้นหาทักษะหรือความสนใจ"
+
+      - btnSearchSkill:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 392
+            Y: =uHeaderH + uPad
+            Width: =150
+            Height: =uTap
+            Text: ="ค้นหา"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="ค้นหาทักษะ"
+            OnSelect: |
+              =If(gblDeptFilter = txtAllDept,
+                  ClearCollect(colSkills,
+                      Filter(SkillsInterests, StartsWith(Title, txtSkillSearch.Text))),
+                  ClearCollect(colSkills,
+                      Filter(SkillsInterests,
+                          Department = gblDeptFilter,
+                          StartsWith(Title, txtSkillSearch.Text)))
+               );
+               ClearCollect(colSkillPeople,
+                   SortByColumns(Distinct(colSkills, PersonEmail), "Value", SortOrder.Ascending)
+               )
+
+      - lblPeopleHead:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad + 60
+            Width: =400
+            Height: =36
+            Text: ="รายชื่อ (" & Text(CountRows(colSkillPeople)) & " คน)"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - galPeople:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblPeopleHead.Y + 40
+            Width: =400
+            Height: =768 - (lblPeopleHead.Y + 40) - uPad
+            TemplateSize: =uTap + 8
+            ShowScrollbar: =true
+            Items: =colSkillPeople
+          Children:
+            - btnPerson:
+                Control: Classic/Button
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =400
+                  Height: =uTap
+                  Text: =ThisItem.Value
+                  Align: =Align.Left
+                  PaddingLeft: =12
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =If(gblSelPerson = ThisItem.Value, clrWhite, clrTextMain)
+                  Fill: =If(gblSelPerson = ThisItem.Value, clrPrimary, clrSurface)
+                  HoverFill: =If(gblSelPerson = ThisItem.Value, clrPrimaryDk, clrHover)
+                  BorderColor: =clrBorder
+                  BorderThickness: =1
+                  AccessibleLabel: ="ดูโปรไฟล์ของ " & ThisItem.Value
+                  OnSelect: =Set(gblSelPerson, ThisItem.Value)
+
+      - lblProfileHead:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 432
+            Y: =uHeaderH + uPad + 60
+            Width: =600
+            Height: =36
+            Text: =Coalesce(gblSelPerson, "เลือกรายชื่อทางซ้ายเพื่อดูโปรไฟล์")
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - galPersonSkills:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + 432
+            Y: =lblProfileHead.Y + 40
+            Width: =600
+            Height: =768 - (lblProfileHead.Y + 40) - uPad
+            TemplateSize: =64
+            ShowScrollbar: =true
+            Items: |
+              =SortByColumns(
+                  Filter(colSkills, PersonEmail = gblSelPerson),
+                  "ItemKind", SortOrder.Ascending
+               )
+          Children:
+            - recSk:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =600
+                  Height: =58
+                  Fill: =clrSurface
+                  BorderColor: =clrBorder
+                  BorderThickness: =1
+            - lblSkKind:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =12
+                  Width: =120
+                  Height: =34
+                  Text: =If(ThisItem.ItemKind = "Skill", "ทักษะ", "ความสนใจ")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrWhite
+                  Fill: =If(ThisItem.ItemKind = "Skill", clrPrimary, clrNavy)
+                  Align: =Align.Center
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblSkName:
+                Control: Label
+                Properties:
+                  X: =144
+                  Y: =0
+                  Width: =280
+                  Height: =58
+                  Text: =ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblSkLevel:
+                Control: Label
+                Properties:
+                  X: =430
+                  Y: =0
+                  Width: =70
+                  Height: =58
+                  Text: =Coalesce(ThisItem.Level, "-")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+                  VerticalAlign: =VerticalAlign.Middle
+            - btnSkEdit:
+                Control: Classic/Icon
+                Properties:
+                  Visible: =gblIsAdmin
+                  Icon: =Icon.Edit
+                  X: =508
+                  Y: =8
+                  Width: =uTap
+                  Height: =uTap
+                  Color: =clrPrimary
+                  AccessibleLabel: ="แก้ไข " & ThisItem.Title
+                  OnSelect: |
+                    =Set(gblEditSkill, ThisItem);
+                     Set(gblSkillFormOpen, true)
+            - btnSkDel:
+                Control: Classic/Icon
+                Properties:
+                  Visible: =gblIsAdmin
+                  Icon: =Icon.Trash
+                  X: =552
+                  Y: =8
+                  Width: =uTap
+                  Height: =uTap
+                  Color: =clrStBlocked
+                  AccessibleLabel: ="ลบ " & ThisItem.Title
+                  OnSelect: |
+                    =Set(gblEditSkill, ThisItem);
+                     Set(gblConfirmAction, "DeleteSkill");
+                     Set(gblConfirmTitle, "ลบรายการนี้?");
+                     Set(gblConfirmBody,
+                         "จะลบ """ & ThisItem.Title & """ ของ " & ThisItem.PersonEmail & Char(10) &
+                         "การลบนี้ย้อนกลับไม่ได้");
+                     Set(gblConfirmOpen, true)
+
+      - btnAddSkill:
+          Control: Classic/Button
+          Properties:
+            Visible: =gblIsAdmin
+            X: =1366 - 260
+            Y: =uHeaderH + uPad
+            Width: =240
+            Height: =uTap
+            Text: ="เพิ่มทักษะ/ความสนใจ"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="เพิ่มทักษะหรือความสนใจใหม่"
+            OnSelect: |
+              =Set(gblEditSkill, Blank());
+               Set(gblSkillFormOpen, true)
+
+      # ---------- ฟอร์มเพิ่ม/แก้ไข ----------
+      - recFormScrim:
+          Control: Rectangle
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =0
+            Y: =0
+            Width: =1366
+            Height: =768
+            Fill: =RGBA(0, 0, 0, 0.45)
+
+      - recForm:
+          Control: Rectangle
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =(1366 - 560) / 2
+            Y: =120
+            Width: =560
+            Height: =460
+            Fill: =clrWhite
+
+      - lblFormTitle:
+          Control: Label
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + 24
+            Y: =recForm.Y + 20
+            Width: =500
+            Height: =40
+            Text: =If(IsBlank(gblEditSkill), "เพิ่มรายการใหม่", "แก้ไขรายการ")
+            Font: =fntMain
+            Size: =szH2
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - cboFormPerson:
+          Control: Classic/ComboBox
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + 24
+            Y: =recForm.Y + 76
+            Width: =512
+            Height: =uTap
+            Items: |
+              =Office365Users.SearchUserV2({ searchTerm: cboFormPerson.SearchText, top: 15 }).value
+            DisplayFields: =["displayName"]
+            SearchFields: =["displayName"]
+            SelectMultiple: =false
+            InputTextPlaceholder: ="เลือกบุคคล"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="เลือกบุคคล"
+
+      - ddFormKind:
+          Control: Classic/DropDown
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + 24
+            Y: =recForm.Y + 132
+            Width: =250
+            Height: =uTap
+            Items: |
+              =Table({ Key: "Skill", Label: "ทักษะ" }, { Key: "Interest", Label: "ความสนใจ" })
+            Value: ="Label"
+            Default: =If(Coalesce(gblEditSkill.ItemKind, "Skill") = "Skill", "ทักษะ", "ความสนใจ")
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ประเภท"
+
+      - txtFormName:
+          Control: Classic/TextInput
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + 24
+            Y: =recForm.Y + 188
+            Width: =512
+            Height: =uTap
+            Default: =Coalesce(gblEditSkill.Title, "")
+            HintText: ="ชื่อทักษะหรือความสนใจ"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ชื่อทักษะหรือความสนใจ"
+
+      - txtFormLevel:
+          Control: Classic/TextInput
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + 24
+            Y: =recForm.Y + 244
+            Width: =250
+            Height: =uTap
+            Default: =Coalesce(gblEditSkill.Level, "")
+            HintText: ="ระดับ (ไม่บังคับ)"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ระดับ ไม่บังคับ"
+
+      - lblFormError:
+          Control: Label
+          Properties:
+            Visible: =gblSkillFormOpen && !IsBlank(gblFormError)
+            X: =recForm.X + 24
+            Y: =recForm.Y + 300
+            Width: =512
+            Height: =50
+            Text: =gblFormError
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrStBlocked
+
+      - btnFormCancel:
+          Control: Classic/Button
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + 24
+            Y: =recForm.Y + recForm.Height - 68
+            Width: =200
+            Height: =uTap
+            Text: ="ยกเลิก"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="ยกเลิก"
+            OnSelect: =Set(gblSkillFormOpen, false); Set(gblFormError, "")
+
+      - btnFormSave:
+          Control: Classic/Button
+          Properties:
+            Visible: =gblSkillFormOpen
+            X: =recForm.X + recForm.Width - 224
+            Y: =recForm.Y + recForm.Height - 68
+            Width: =200
+            Height: =uTap
+            Text: ="บันทึก"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="บันทึก"
+            OnSelect: |
+              =If(IsBlank(txtFormName.Text) ||
+                  (IsBlank(gblEditSkill) && IsBlank(cboFormPerson.Selected.mail)),
+                  Set(gblFormError, "กรุณากรอกชื่อรายการ และเลือกบุคคลให้ครบ"),
+
+                  Set(gblFormError, "");
+                  Patch(SkillsInterests,
+                      If(IsBlank(gblEditSkill), Defaults(SkillsInterests),
+                         LookUp(SkillsInterests, ID = gblEditSkill.ID)),
+                      {
+                          Title:       txtFormName.Text,
+                          ItemKind:    ddFormKind.Selected.Key,
+                          Level:       txtFormLevel.Text,
+                          PersonEmail: If(IsBlank(gblEditSkill),
+                                          Lower(cboFormPerson.Selected.mail),
+                                          gblEditSkill.PersonEmail),
+                          PersonUser:  If(IsBlank(cboFormPerson.Selected.mail),
+                                          gblEditSkill.PersonUser,
+                                          {
+                                              Claims:      "i:0#.f|membership|" & Lower(cboFormPerson.Selected.mail),
+                                              DisplayName: cboFormPerson.Selected.displayName,
+                                              Email:       Lower(cboFormPerson.Selected.mail),
+                                              Department:  "",
+                                              JobTitle:    "",
+                                              Picture:     ""
+                                          }),
+                          Department:  If(IsBlank(gblEditSkill),
+                                          IfError(Text(Office365Users.UserProfileV2(cboFormPerson.Selected.mail).department), ""),
+                                          gblEditSkill.Department)
+                      }
+                  );
+                  If(IsEmpty(Errors(SkillsInterests)),
+                      Set(gblSkillFormOpen, false);
+                      Set(gblToast, "บันทึกเรียบร้อยแล้ว"); Set(gblToastIsError, false);
+                      Select(btnSearchSkill),
+                      Set(gblFormError, "บันทึกไม่สำเร็จ: " & First(Errors(SkillsInterests)).Message)
+                  )
+               )
+
+      - cmpConfirm_1:
+          Control: Component
+          ComponentName: cmpConfirm
+          Properties:
+            X: =0
+            Y: =0
+            IsOpen: =gblConfirmOpen
+            TitleText: =gblConfirmTitle
+            BodyText: =gblConfirmBody
+            ConfirmText: ="ลบถาวร"
+            OnCancel: =Set(gblConfirmOpen, false)
+            OnConfirm: |
+              =Remove(SkillsInterests, LookUp(SkillsInterests, ID = gblEditSkill.ID));
+               Set(gblConfirmOpen, false);
+               If(IsEmpty(Errors(SkillsInterests)),
+                   Set(gblToast, "ลบเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                   Set(gblToast, "ลบไม่สำเร็จ: " & First(Errors(SkillsInterests)).Message);
+                   Set(gblToastIsError, true)
+               );
+               Select(btnSearchSkill)
+
+      - lblToast:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblToast)
+            X: =uSidebarW + 24
+            Y: =768 - 76
+            Width: =560
+            Height: =52
+            Text: =gblToast
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =If(gblToastIsError, clrStBlocked, clrStDone)
+            PaddingLeft: =uPad
+            VerticalAlign: =VerticalAlign.Middle
+            OnSelect: =Set(gblToast, "")

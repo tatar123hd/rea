@@ -1,0 +1,949 @@
+# =====================================================================
+# scrProject — สร้างและแก้ไขโปรเจกต์ เฟส และงาน
+# ---------------------------------------------------------------------
+# เข้าหน้านี้ได้ 2 ทาง
+#   1) ปุ่ม "สร้างโปรเจกต์ใหม่"  -> gblEditProjectID = 0
+#   2) ปุ่ม "แก้ไข" ในแผงรายละเอียด -> gblEditProjectID = รหัสโปรเจกต์
+#
+# กฎสำคัญที่เขียนไว้ในสูตร
+#   - วันที่เขียนลง SharePoint ยึดเที่ยงวันเสมอ: DateAdd(<วันที่>, 12, TimeUnit.Hours)
+#   - วันเริ่ม/สิ้นสุดของโปรเจกต์คำนวณจากเฟสทุกครั้งที่เพิ่ม แก้ หรือลบเฟส
+#   - ช่องเลือกคนแสดงเฉพาะคนในแผนกของผู้สร้าง
+#   - คอลัมน์ที่เก็บซ้ำ (ProjectTitle / PhaseTitle / Department / OwnerEmail /
+#     AssignedToEmail) ถูกเขียนพร้อมกันเสมอในคำสั่ง Patch เดียวกัน
+# =====================================================================
+Screens:
+  scrProject:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Project");
+         Set(gblProj,
+             If(Coalesce(gblEditProjectID, 0) = 0,
+                 Blank(),
+                 LookUp(Projects, ID = gblEditProjectID))
+         );
+         Set(gblCanEditProj,
+             Coalesce(gblEditProjectID, 0) = 0
+             || Lower(Coalesce(gblProj.OwnerEmail, "")) = gblUserEmail
+         );
+         ClearCollect(colEditPhases,
+             SortByColumns(Filter(Phases, ProjectID = Coalesce(gblEditProjectID, -1)), "SortOrder", SortOrder.Ascending)
+         );
+         Set(gblSelPhase, First(colEditPhases));
+         ClearCollect(colEditTasks,
+             Filter(Tasks, PhaseID = Coalesce(gblSelPhase.ID, -1))
+         );
+         Set(gblPhaseFormOpen, false);
+         Set(gblFormError, "")
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Timeline"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: =If(IsBlank(gblProj), "สร้างโปรเจกต์ใหม่", "แก้ไขโปรเจกต์")
+            SubtitleText: |
+              =If(gblCanEditProj,
+                  "กรอกข้อมูลแล้วกดบันทึก",
+                  "คุณดูได้อย่างเดียว เฉพาะผู้สร้างโปรเจกต์เท่านั้นที่แก้ไขได้")
+            OnRefresh: =Navigate(scrProject)
+
+      - btnBack:
+          Control: Classic/Button
+          Properties:
+            X: =1366 - 180
+            Y: =14
+            Width: =160
+            Height: =uTap
+            Text: ="กลับไทม์ไลน์"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="กลับไปหน้าไทม์ไลน์"
+            OnSelect: =Navigate(scrTimeline)
+
+      # ================= คอลัมน์ 1 : ข้อมูลโปรเจกต์ =================
+      - lblSecProj:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad
+            Width: =400
+            Height: =36
+            Text: ="1. ข้อมูลโปรเจกต์"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - txtProjTitle:
+          Control: Classic/TextInput
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblSecProj.Y + 44
+            Width: =400
+            Height: =uTap
+            Default: =Coalesce(gblProj.Title, "")
+            HintText: ="ชื่อโปรเจกต์"
+            DisplayMode: =If(gblCanEditProj, DisplayMode.Edit, DisplayMode.View)
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ชื่อโปรเจกต์"
+
+      - ddProjStatus:
+          Control: Classic/DropDown
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =txtProjTitle.Y + 56
+            Width: =400
+            Height: =uTap
+            Items: =ShowColumns(SortByColumns(tblStatus, "Seq", SortOrder.Ascending), "Key", "Label")
+            Value: ="Label"
+            Default: =Coalesce(LookUp(tblStatus, Key = gblProj.StatusKey, Label), "ยังไม่เริ่ม")
+            DisplayMode: =If(gblCanEditProj, DisplayMode.Edit, DisplayMode.View)
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="สถานะโปรเจกต์"
+
+      - txtProjNotes:
+          Control: Classic/TextInput
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =ddProjStatus.Y + 56
+            Width: =400
+            Height: =120
+            Mode: =TextMode.MultiLine
+            Default: =Coalesce(gblProj.Notes, "")
+            HintText: ="หมายเหตุ (ไม่บังคับ)"
+            DisplayMode: =If(gblCanEditProj, DisplayMode.Edit, DisplayMode.View)
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="หมายเหตุโปรเจกต์"
+
+      - lblProjDates:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =txtProjNotes.Y + 132
+            Width: =400
+            Height: =60
+            Text: |
+              ="ช่วงเวลาโปรเจกต์ (คำนวณจากเฟสอัตโนมัติ)" & Char(10) &
+               If(IsEmpty(colEditPhases), "ยังไม่มีเฟส",
+                  Text(First(SortByColumns(colEditPhases, "StartDate", SortOrder.Ascending)).StartDate, "d mmm yyyy", "en-US") &
+                  "  ถึง  " &
+                  Text(First(SortByColumns(colEditPhases, "EndDate", SortOrder.Descending)).EndDate, "d mmm yyyy", "en-US"))
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+
+      - lblProjOwner:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblProjDates.Y + 68
+            Width: =400
+            Height: =32
+            Text: |
+              ="เจ้าของ: " & Coalesce(gblProj.OwnerEmail, gblUserEmail)
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+
+      - lblProjError:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblFormError)
+            X: =uSidebarW + uPad
+            Y: =lblProjOwner.Y + 40
+            Width: =400
+            Height: =60
+            Text: =gblFormError
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrStBlocked
+
+      - btnSaveProj:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblProjOwner.Y + 108
+            Width: =400
+            Height: =uTap
+            Visible: =gblCanEditProj
+            Text: ="บันทึกโปรเจกต์"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="บันทึกข้อมูลโปรเจกต์"
+            OnSelect: |
+              =If(IsBlank(txtProjTitle.Text),
+                  Set(gblFormError, "กรุณากรอกชื่อโปรเจกต์"),
+
+                  Set(gblFormError, "");
+                  Set(gblSavedProj,
+                      Patch(Projects,
+                          If(IsBlank(gblProj), Defaults(Projects), LookUp(Projects, ID = gblEditProjectID)),
+                          {
+                              Title:      txtProjTitle.Text,
+                              StatusKey:  ddProjStatus.Selected.Key,
+                              Notes:      txtProjNotes.Text,
+                              Department: If(IsBlank(gblProj),
+                                             If(gblDeptMissing, "ไม่ระบุ", gblUserDept),
+                                             gblProj.Department),
+                              OwnerEmail: If(IsBlank(gblProj), gblUserEmail, gblProj.OwnerEmail),
+                              StartDate:  If(IsEmpty(colEditPhases),
+                                             DateAdd(Today(), 12, TimeUnit.Hours),
+                                             First(SortByColumns(colEditPhases, "StartDate", SortOrder.Ascending)).StartDate),
+                              EndDate:    If(IsEmpty(colEditPhases),
+                                             DateAdd(Today(), 12, TimeUnit.Hours),
+                                             First(SortByColumns(colEditPhases, "EndDate", SortOrder.Descending)).EndDate)
+                          }
+                      )
+                  );
+                  If(IsEmpty(Errors(Projects)),
+                      Set(gblEditProjectID, gblSavedProj.ID);
+                      Set(gblProj, gblSavedProj);
+                      Set(gblToast, "บันทึกโปรเจกต์เรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                      Set(gblFormError, "บันทึกไม่สำเร็จ: " & First(Errors(Projects)).Message)
+                  )
+               )
+
+      # ================= คอลัมน์ 2 : เฟส =================
+      - lblSecPhase:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 440
+            Y: =uHeaderH + uPad
+            Width: =380
+            Height: =36
+            Text: ="2. เฟสของโปรเจกต์"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - btnAddPhase:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 440
+            Y: =lblSecPhase.Y + 40
+            Width: =380
+            Height: =uTap
+            Visible: =gblCanEditProj
+            DisplayMode: =If(Coalesce(gblEditProjectID, 0) > 0, DisplayMode.Edit, DisplayMode.Disabled)
+            Text: ="เพิ่มเฟส"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            HoverFill: =clrHover
+            DisabledColor: =clrTextMuted
+            DisabledBorderColor: =clrBorder
+            AccessibleLabel: ="เพิ่มเฟสใหม่"
+            OnSelect: |
+              =Set(gblEditPhase, Blank());
+               Set(gblPhaseFormOpen, true)
+
+      - lblAddPhaseHint:
+          Control: Label
+          Properties:
+            Visible: =Coalesce(gblEditProjectID, 0) = 0
+            X: =uSidebarW + 440
+            Y: =btnAddPhase.Y + 52
+            Width: =380
+            Height: =48
+            Text: ="บันทึกโปรเจกต์ก่อน จึงจะเพิ่มเฟสได้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWarnText
+            Fill: =clrWarnBg
+            PaddingLeft: =12
+            VerticalAlign: =VerticalAlign.Middle
+
+      - galPhases:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + 440
+            Y: =btnAddPhase.Y + 56
+            Width: =380
+            Height: =768 - (btnAddPhase.Y + 56) - uPad
+            TemplateSize: =92
+            TemplatePadding: =6
+            ShowScrollbar: =true
+            Items: =colEditPhases
+          Children:
+            - recPh:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =380
+                  Height: =86
+                  Fill: =If(gblSelPhase.ID = ThisItem.ID, clrHover, clrSurface)
+                  BorderColor: =If(gblSelPhase.ID = ThisItem.ID, clrPrimary, clrBorder)
+                  BorderThickness: =2
+            - btnPhSelect:
+                Control: Classic/Button
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =290
+                  Height: =86
+                  Text: =""
+                  Fill: =RGBA(0, 0, 0, 0)
+                  HoverFill: =RGBA(0, 0, 0, 0.04)
+                  BorderThickness: =0
+                  AccessibleLabel: ="เลือกเฟส " & ThisItem.Title
+                  OnSelect: |
+                    =Set(gblSelPhase, ThisItem);
+                     ClearCollect(colEditTasks, Filter(Tasks, PhaseID = ThisItem.ID));
+                     Clear(colPickedTemplates)
+            - lblPhTitle:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =8
+                  Width: =270
+                  Height: =30
+                  Text: =Text(ThisItem.SortOrder) & ". " & ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrTextMain
+                  DisplayMode: =DisplayMode.Disabled
+            - lblPhDates:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =38
+                  Width: =270
+                  Height: =26
+                  Text: |
+                    =Text(ThisItem.StartDate, "d mmm yyyy", "en-US") & " – " &
+                     Text(ThisItem.EndDate, "d mmm yyyy", "en-US")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+                  DisplayMode: =DisplayMode.Disabled
+            - lblPhPerson:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =60
+                  Width: =270
+                  Height: =24
+                  Text: =Coalesce(ThisItem.PersonEmail, "ยังไม่ระบุผู้รับผิดชอบ")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+                  DisplayMode: =DisplayMode.Disabled
+            - icoPhEdit:
+                Control: Classic/Icon
+                Properties:
+                  Visible: =gblCanEditProj
+                  Icon: =Icon.Edit
+                  X: =296
+                  Y: =10
+                  Width: =uTap
+                  Height: =uTap
+                  Color: =clrPrimary
+                  AccessibleLabel: ="แก้ไขเฟส " & ThisItem.Title
+                  OnSelect: =Set(gblEditPhase, ThisItem); Set(gblPhaseFormOpen, true)
+            - icoPhDel:
+                Control: Classic/Icon
+                Properties:
+                  Visible: =gblCanEditProj
+                  Icon: =Icon.Trash
+                  X: =330
+                  Y: =10
+                  Width: =uTap
+                  Height: =uTap
+                  Color: =clrStBlocked
+                  AccessibleLabel: ="ลบเฟส " & ThisItem.Title
+                  OnSelect: |
+                    =Set(gblEditPhase, ThisItem);
+                     Set(gblConfirmAction, "DeletePhase");
+                     Set(gblConfirmTitle, "ลบเฟสนี้?");
+                     Set(gblConfirmBody,
+                         "จะลบ """ & ThisItem.Title & """ พร้อมงานในเฟสนี้ " &
+                         Text(CountRows(Filter(Tasks, PhaseID = ThisItem.ID))) & " รายการ" & Char(10) &
+                         "การลบนี้ย้อนกลับไม่ได้");
+                     Set(gblConfirmOpen, true)
+
+      # ================= คอลัมน์ 3 : งานในเฟส =================
+      - lblSecTask:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 840
+            Y: =uHeaderH + uPad
+            Width: =460
+            Height: =36
+            Text: |
+              ="3. งานในเฟส" & If(IsBlank(gblSelPhase), "", ": " & gblSelPhase.Title)
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - lblTemplateHead:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblSelPhase) && gblCanEditProj
+            X: =uSidebarW + 840
+            Y: =lblSecTask.Y + 40
+            Width: =460
+            Height: =30
+            Text: ="งานมาตรฐานที่แนะนำสำหรับเฟสประเภทนี้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+
+      - galTemplates:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            Visible: =!IsBlank(gblSelPhase) && gblCanEditProj
+            X: =uSidebarW + 840
+            Y: =lblTemplateHead.Y + 34
+            Width: =460
+            Height: =200
+            TemplateSize: =uTap
+            ShowScrollbar: =true
+            Items: |
+              =SortByColumns(
+                  Filter(TaskTemplates, PhaseType = Coalesce(gblSelPhase.PhaseType, "")),
+                  "SortOrder", SortOrder.Ascending
+               )
+          Children:
+            - chkTemplate:
+                Control: Classic/CheckBox
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =460
+                  Height: =uTap
+                  Text: =ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  AccessibleLabel: ="เลือกงาน " & ThisItem.Title
+                  OnCheck: |
+                    =Collect(colPickedTemplates, { Title: ThisItem.Title })
+                  OnUncheck: =RemoveIf(colPickedTemplates, Title = ThisItem.Title)
+
+      - btnAddPicked:
+          Control: Classic/Button
+          Properties:
+            Visible: =!IsBlank(gblSelPhase) && gblCanEditProj
+            X: =uSidebarW + 840
+            Y: =galTemplates.Y + 208
+            Width: =300
+            Height: =uTap
+            DisplayMode: =If(IsEmpty(colPickedTemplates), DisplayMode.Disabled, DisplayMode.Edit)
+            Text: ="เพิ่มงานที่เลือก (" & Text(CountRows(colPickedTemplates)) & ")"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            DisabledFill: =clrBorder
+            DisabledColor: =clrTextMuted
+            AccessibleLabel: ="เพิ่มงานที่เลือกทั้งหมดเข้าเฟสนี้"
+            OnSelect: |
+              =ForAll(colPickedTemplates As tpl,
+                  Patch(Tasks, Defaults(Tasks),
+                      {
+                          Title:           tpl.Title,
+                          Description:     "",
+                          ProjectID:       gblEditProjectID,
+                          ProjectTitle:    gblProj.Title,
+                          PhaseID:         gblSelPhase.ID,
+                          PhaseTitle:      gblSelPhase.Title,
+                          Department:      gblProj.Department,
+                          AssignedToEmail: Coalesce(gblSelPhase.PersonEmail, ""),
+                          AssignedTo:
+                              If(IsBlank(gblSelPhase.PersonEmail), Blank(),
+                                  {
+                                      Claims:      "i:0#.f|membership|" & Lower(gblSelPhase.PersonEmail),
+                                      DisplayName: Coalesce(gblSelPhase.PersonAssigned.DisplayName, gblSelPhase.PersonEmail),
+                                      Email:       Lower(gblSelPhase.PersonEmail),
+                                      Department:  "",
+                                      JobTitle:    "",
+                                      Picture:     ""
+                                  }),
+                          StartDate:       gblSelPhase.StartDate,
+                          DueDate:         gblSelPhase.EndDate,
+                          StatusKey:       "NotStarted",
+                          PriorityKey:     "Medium",
+                          OwnerEmail:      gblUserEmail
+                      }
+                  )
+               );
+               Clear(colPickedTemplates);
+               ClearCollect(colEditTasks, Filter(Tasks, PhaseID = gblSelPhase.ID));
+               If(IsEmpty(Errors(Tasks)),
+                   Set(gblToast, "เพิ่มงานเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                   Set(gblToast, "เพิ่มงานไม่สำเร็จ: " & First(Errors(Tasks)).Message);
+                   Set(gblToastIsError, true)
+               )
+
+      - txtNewTask:
+          Control: Classic/TextInput
+          Properties:
+            Visible: =!IsBlank(gblSelPhase) && gblCanEditProj
+            X: =uSidebarW + 840
+            Y: =btnAddPicked.Y + 56
+            Width: =300
+            Height: =uTap
+            HintText: ="หรือพิมพ์ชื่องานเอง"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ชื่องานที่จะเพิ่มเอง"
+
+      - btnAddCustom:
+          Control: Classic/Button
+          Properties:
+            Visible: =!IsBlank(gblSelPhase) && gblCanEditProj
+            X: =uSidebarW + 1150
+            Y: =btnAddPicked.Y + 56
+            Width: =150
+            Height: =uTap
+            DisplayMode: =If(IsBlank(txtNewTask.Text), DisplayMode.Disabled, DisplayMode.Edit)
+            Text: ="เพิ่มงาน"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            AccessibleLabel: ="เพิ่มงานที่พิมพ์เอง"
+            OnSelect: |
+              =Patch(Tasks, Defaults(Tasks),
+                  {
+                      Title:           txtNewTask.Text,
+                      Description:     "",
+                      ProjectID:       gblEditProjectID,
+                      ProjectTitle:    gblProj.Title,
+                      PhaseID:         gblSelPhase.ID,
+                      PhaseTitle:      gblSelPhase.Title,
+                      Department:      gblProj.Department,
+                      AssignedToEmail: Coalesce(gblSelPhase.PersonEmail, ""),
+                      AssignedTo:
+                          If(IsBlank(gblSelPhase.PersonEmail), Blank(),
+                              {
+                                  Claims:      "i:0#.f|membership|" & Lower(gblSelPhase.PersonEmail),
+                                  DisplayName: Coalesce(gblSelPhase.PersonAssigned.DisplayName, gblSelPhase.PersonEmail),
+                                  Email:       Lower(gblSelPhase.PersonEmail),
+                                  Department:  "",
+                                  JobTitle:    "",
+                                  Picture:     ""
+                              }),
+                      StartDate:       gblSelPhase.StartDate,
+                      DueDate:         gblSelPhase.EndDate,
+                      StatusKey:       "NotStarted",
+                      PriorityKey:     "Medium",
+                      OwnerEmail:      gblUserEmail
+                  }
+               );
+               Reset(txtNewTask);
+               ClearCollect(colEditTasks, Filter(Tasks, PhaseID = gblSelPhase.ID))
+
+      - galTasks:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + 840
+            Y: =txtNewTask.Y + 56
+            Width: =460
+            Height: =768 - (txtNewTask.Y + 56) - uPad
+            TemplateSize: =78
+            TemplatePadding: =6
+            ShowScrollbar: =true
+            Items: =SortByColumns(colEditTasks, "DueDate", SortOrder.Ascending)
+          Children:
+            - recTk:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =460
+                  Height: =72
+                  Fill: =clrSurface
+                  BorderColor: =clrBorder
+                  BorderThickness: =1
+            - lblTkTitle:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =6
+                  Width: =340
+                  Height: =30
+                  Text: =ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+            - lblTkMeta:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =38
+                  Width: =340
+                  Height: =26
+                  Text: |
+                    =Text(ThisItem.DueDate, "d mmm yyyy", "en-US") & "  ·  " &
+                     Coalesce(LookUp(tblStatus, Key = ThisItem.StatusKey, Label), "ไม่ระบุ") & "  ·  " &
+                     Coalesce(ThisItem.AssignedToEmail, "ยังไม่มอบหมาย")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+            - icoTkDel:
+                Control: Classic/Icon
+                Properties:
+                  Visible: =gblCanEditProj
+                  Icon: =Icon.Trash
+                  X: =406
+                  Y: =14
+                  Width: =uTap
+                  Height: =uTap
+                  Color: =clrStBlocked
+                  AccessibleLabel: ="ลบงาน " & ThisItem.Title
+                  OnSelect: |
+                    =Set(gblEditTask, ThisItem);
+                     Set(gblConfirmAction, "DeleteTask");
+                     Set(gblConfirmTitle, "ลบงานนี้?");
+                     Set(gblConfirmBody, "จะลบงาน """ & ThisItem.Title & """" & Char(10) & "การลบนี้ย้อนกลับไม่ได้");
+                     Set(gblConfirmOpen, true)
+
+      # ================= ฟอร์มเฟส =================
+      - recPhScrim:
+          Control: Rectangle
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =0
+            Y: =0
+            Width: =1366
+            Height: =768
+            Fill: =RGBA(0, 0, 0, 0.45)
+
+      - recPhForm:
+          Control: Rectangle
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =(1366 - 600) / 2
+            Y: =90
+            Width: =600
+            Height: =560
+            Fill: =clrWhite
+
+      - lblPhFormTitle:
+          Control: Label
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 20
+            Width: =540
+            Height: =40
+            Text: =If(IsBlank(gblEditPhase), "เพิ่มเฟสใหม่", "แก้ไขเฟส")
+            Font: =fntMain
+            Size: =szH2
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - ddPhType:
+          Control: Classic/DropDown
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 76
+            Width: =270
+            Height: =uTap
+            Items: =ShowColumns(SortByColumns(tblPhaseType, "Seq", SortOrder.Ascending), "Key", "Label")
+            Value: ="Label"
+            Default: =Coalesce(LookUp(tblPhaseType, Key = gblEditPhase.PhaseType, Label), "วางแผน")
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ประเภทเฟส"
+
+      - txtPhOrder:
+          Control: Classic/TextInput
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 310
+            Y: =recPhForm.Y + 76
+            Width: =120
+            Height: =uTap
+            Format: =TextFormat.Number
+            Default: =Text(Coalesce(gblEditPhase.SortOrder, CountRows(colEditPhases) + 1))
+            HintText: ="ลำดับ"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ลำดับของเฟส"
+
+      - txtPhTitle:
+          Control: Classic/TextInput
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 132
+            Width: =552
+            Height: =uTap
+            Default: =Coalesce(gblEditPhase.Title, "")
+            HintText: ="ชื่อเฟส"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ชื่อเฟส"
+
+      - dpPhStart:
+          Control: Classic/DatePicker
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 188
+            Width: =264
+            Height: =uTap
+            DefaultDate: =Coalesce(gblEditPhase.StartDate, Today())
+            Format: ="d mmm yyyy"
+            Language: ="en-US"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="วันเริ่มของเฟส"
+
+      - dpPhEnd:
+          Control: Classic/DatePicker
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 312
+            Y: =recPhForm.Y + 188
+            Width: =264
+            Height: =uTap
+            DefaultDate: =Coalesce(gblEditPhase.EndDate, DateAdd(Today(), 14, TimeUnit.Days))
+            Format: ="d mmm yyyy"
+            Language: ="en-US"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="วันสิ้นสุดของเฟส"
+
+      - cboPhPerson:
+          Control: Classic/ComboBox
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 244
+            Width: =552
+            Height: =uTap
+            Items: |
+              =Filter(
+                  Office365Users.SearchUserV2({ searchTerm: cboPhPerson.SearchText, top: 15 }).value,
+                  gblDeptMissing || department = Coalesce(gblProj.Department, gblUserDept)
+               )
+            DisplayFields: =["displayName"]
+            SearchFields: =["displayName"]
+            SelectMultiple: =false
+            InputTextPlaceholder: ="ผู้รับผิดชอบเฟส (เฉพาะคนในแผนกเดียวกัน)"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ผู้รับผิดชอบเฟส"
+
+      - ddPhStatus:
+          Control: Classic/DropDown
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 300
+            Width: =270
+            Height: =uTap
+            Items: =ShowColumns(SortByColumns(tblStatus, "Seq", SortOrder.Ascending), "Key", "Label")
+            Value: ="Label"
+            Default: =Coalesce(LookUp(tblStatus, Key = gblEditPhase.StatusKey, Label), "ยังไม่เริ่ม")
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="สถานะเฟส"
+
+      - lblPhError:
+          Control: Label
+          Properties:
+            Visible: =gblPhaseFormOpen && !IsBlank(gblFormError)
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + 356
+            Width: =552
+            Height: =80
+            Text: =gblFormError
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrStBlocked
+
+      - btnPhCancel:
+          Control: Classic/Button
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + 24
+            Y: =recPhForm.Y + recPhForm.Height - 68
+            Width: =220
+            Height: =uTap
+            Text: ="ยกเลิก"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="ยกเลิก"
+            OnSelect: =Set(gblPhaseFormOpen, false); Set(gblFormError, "")
+
+      - btnPhSave:
+          Control: Classic/Button
+          Properties:
+            Visible: =gblPhaseFormOpen
+            X: =recPhForm.X + recPhForm.Width - 244
+            Y: =recPhForm.Y + recPhForm.Height - 68
+            Width: =220
+            Height: =uTap
+            Text: ="บันทึกเฟส"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="บันทึกเฟส"
+            OnSelect: |
+              =If(IsBlank(txtPhTitle.Text),
+                  Set(gblFormError, "กรุณากรอกชื่อเฟส"),
+              If(dpPhEnd.SelectedDate < dpPhStart.SelectedDate,
+                  Set(gblFormError, "วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่ม"),
+
+                  Set(gblFormError, "");
+                  Patch(Phases,
+                      If(IsBlank(gblEditPhase), Defaults(Phases), LookUp(Phases, ID = gblEditPhase.ID)),
+                      {
+                          Title:        txtPhTitle.Text,
+                          ProjectID:    gblEditProjectID,
+                          ProjectTitle: gblProj.Title,
+                          Department:   gblProj.Department,
+                          PhaseType:    ddPhType.Selected.Key,
+                          SortOrder:    Value(txtPhOrder.Text),
+                          // ยึดเที่ยงวันเสมอ กันวันที่เพี้ยนไป 1 วันเมื่อแปลงเป็น UTC
+                          StartDate:    DateAdd(dpPhStart.SelectedDate, 12, TimeUnit.Hours),
+                          EndDate:      DateAdd(dpPhEnd.SelectedDate, 12, TimeUnit.Hours),
+                          PersonEmail:  Lower(Coalesce(cboPhPerson.Selected.mail, Coalesce(gblEditPhase.PersonEmail, ""))),
+                          // คอลัมน์ชนิด Person ของ SharePoint ต้องการระเบียนที่มี Claims
+                          PersonAssigned:
+                              If(IsBlank(cboPhPerson.Selected.mail),
+                                  gblEditPhase.PersonAssigned,
+                                  {
+                                      Claims:      "i:0#.f|membership|" & Lower(cboPhPerson.Selected.mail),
+                                      DisplayName: cboPhPerson.Selected.displayName,
+                                      Email:       Lower(cboPhPerson.Selected.mail),
+                                      Department:  "",
+                                      JobTitle:    "",
+                                      Picture:     ""
+                                  }),
+                          StatusKey:    ddPhStatus.Selected.Key,
+                          OwnerEmail:   gblUserEmail
+                      }
+                  );
+                  If(IsEmpty(Errors(Phases)),
+                      ClearCollect(colEditPhases,
+                          SortByColumns(Filter(Phases, ProjectID = gblEditProjectID), "SortOrder", SortOrder.Ascending));
+                      // อัปเดตช่วงเวลาโปรเจกต์จากเฟสทั้งหมด
+                      Patch(Projects, LookUp(Projects, ID = gblEditProjectID),
+                          {
+                              StartDate: First(SortByColumns(colEditPhases, "StartDate", SortOrder.Ascending)).StartDate,
+                              EndDate:   First(SortByColumns(colEditPhases, "EndDate",   SortOrder.Descending)).EndDate
+                          });
+                      Set(gblPhaseFormOpen, false);
+                      Set(gblToast, "บันทึกเฟสเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                      Set(gblFormError, "บันทึกไม่สำเร็จ: " & First(Errors(Phases)).Message)
+                  )
+              ))
+
+      - cmpConfirm_1:
+          Control: Component
+          ComponentName: cmpConfirm
+          Properties:
+            X: =0
+            Y: =0
+            IsOpen: =gblConfirmOpen
+            TitleText: =gblConfirmTitle
+            BodyText: =gblConfirmBody
+            ConfirmText: ="ลบถาวร"
+            OnCancel: =Set(gblConfirmOpen, false)
+            OnConfirm: |
+              =If(gblConfirmAction = "DeletePhase",
+                  RemoveIf(Tasks, PhaseID = gblEditPhase.ID);
+                  Remove(Phases, LookUp(Phases, ID = gblEditPhase.ID));
+                  ClearCollect(colEditPhases,
+                      SortByColumns(Filter(Phases, ProjectID = gblEditProjectID), "SortOrder", SortOrder.Ascending));
+                  Patch(Projects, LookUp(Projects, ID = gblEditProjectID),
+                      {
+                          StartDate: If(IsEmpty(colEditPhases),
+                                        DateAdd(Today(), 12, TimeUnit.Hours),
+                                        First(SortByColumns(colEditPhases, "StartDate", SortOrder.Ascending)).StartDate),
+                          EndDate:   If(IsEmpty(colEditPhases),
+                                        DateAdd(Today(), 12, TimeUnit.Hours),
+                                        First(SortByColumns(colEditPhases, "EndDate", SortOrder.Descending)).EndDate)
+                      });
+                  Set(gblSelPhase, First(colEditPhases));
+                  ClearCollect(colEditTasks, Filter(Tasks, PhaseID = Coalesce(gblSelPhase.ID, -1))),
+
+                  Remove(Tasks, LookUp(Tasks, ID = gblEditTask.ID));
+                  ClearCollect(colEditTasks, Filter(Tasks, PhaseID = Coalesce(gblSelPhase.ID, -1)))
+               );
+               Set(gblConfirmOpen, false);
+               If(IsEmpty(Errors(Phases)) && IsEmpty(Errors(Tasks)),
+                   Set(gblToast, "ลบเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                   Set(gblToast, "ลบไม่สำเร็จ อาจมีงานบางรายการที่คุณไม่ได้เป็นผู้สร้าง");
+                   Set(gblToastIsError, true)
+               )
+
+      - lblToast:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblToast)
+            X: =uSidebarW + 24
+            Y: =768 - 76
+            Width: =560
+            Height: =52
+            Text: =gblToast
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =If(gblToastIsError, clrStBlocked, clrStDone)
+            PaddingLeft: =uPad
+            VerticalAlign: =VerticalAlign.Middle
+            OnSelect: =Set(gblToast, "")

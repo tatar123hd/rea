@@ -1,0 +1,79 @@
+// =====================================================================
+// OpenDetail — เปิดแผงรายละเอียดของแถวที่ถูกคลิก
+// ---------------------------------------------------------------------
+// ใช้ใน OnSelect ของแถบ/แถวในหน้า Timeline, Board, Table, Calendar, My Tasks
+// สมมติว่าในบริบทนั้นมีตัวแปรชื่อ ThisItem ที่มีคอลัมน์แบบเดียวกับ colTimelineVisible
+//
+// หลักการ: ดึง "ระเบียนเต็ม" จาก SharePoint ด้วย ID ตอนคลิกเท่านั้น (Filter ด้วย ID = delegate ได้
+// และคืนแถวเดียว) จึงไม่ต้องลากคอลัมน์รายละเอียดทั้งหมดมาตั้งแต่ตอนโหลดไทม์ไลน์
+// ผลคือชุดข้อมูลที่โหลดเล็กลงมาก ทั้งเร็วกว่าและชน data row limit ยากกว่า
+//
+// ทุกสาขาของ If ต้องคืน "ชุดคอลัมน์เดียวกันและชนิดเดียวกัน" (ข้อความล้วน)
+// ไม่งั้น Power Fx จะฟ้องว่าชนิดของตัวแปรไม่ตรงกัน
+// =====================================================================
+
+Set(gblDetailRow, ThisItem);
+
+Set(gblDetailFull,
+    If(ThisItem.ItemType = "Project",
+        With({ p: LookUp(Projects, ID = ThisItem.ItemID) },
+            {
+                Department:   Text(p.Department),
+                OwnerEmail:   Text(p.OwnerEmail),
+                Description:  Text(p.Notes),
+                PriorityKey:  "",
+                CourseID:     "", Session: "", DraftSession: "", Room: "",
+                Instructor:   "", DSD: "", SeatNum: "", Duration: "", Note: ""
+            }
+        ),
+    If(ThisItem.ItemType = "Phase",
+        With({ h: LookUp(Phases, ID = ThisItem.ItemID) },
+            {
+                Department:   Text(h.Department),
+                OwnerEmail:   Text(h.OwnerEmail),
+                Description:  "",
+                PriorityKey:  "",
+                CourseID:     "", Session: "", DraftSession: "", Room: "",
+                Instructor:   "", DSD: "", SeatNum: "", Duration: "", Note: ""
+            }
+        ),
+    If(ThisItem.ItemType = "Task",
+        With({ t: LookUp(Tasks, ID = ThisItem.ItemID) },
+            {
+                Department:   Text(t.Department),
+                OwnerEmail:   Text(t.OwnerEmail),
+                Description:  Text(t.Description),
+                PriorityKey:  Text(t.PriorityKey),
+                CourseID:     "", Session: "", DraftSession: "", Room: "",
+                Instructor:   "", DSD: "", SeatNum: "", Duration: "", Note: ""
+            }
+        ),
+        // ---- BAU: ดึงเฉพาะตอนเปิดแผง เพราะคอลัมน์รายละเอียดไม่ได้ใช้ในไทม์ไลน์ ----
+        With({ b: LookUp(BAU_TMP, ID = ThisItem.ItemID) },
+            {
+                Department:   "",
+                OwnerEmail:   "",
+                Description:  "",
+                PriorityKey:  "",
+                CourseID:     Text(b.CourseID),
+                Session:      Text(b.Session),
+                DraftSession: Text(b.DraftSession),
+                Room:         Text(b.Room),
+                Instructor:   Text(b.Instructor),
+                DSD:          Text(b.DSD),
+                SeatNum:      Text(b.SeatNum),
+                Duration:     Text(b.Duration),
+                Note:         Text(b.Note)
+            }
+        )
+    )))
+);
+
+// เจ้าของเท่านั้นที่แก้ได้ (BAU แก้ไม่ได้เลย)
+Set(gblCanEdit,
+    ThisItem.ItemType <> "BAU"
+    && ThisItem.ItemType <> "BauLane"
+    && Lower(Coalesce(gblDetailFull.OwnerEmail, "")) = gblUserEmail
+);
+
+Set(gblDetailOpen, true)

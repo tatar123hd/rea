@@ -1,0 +1,364 @@
+# =====================================================================
+# scrTable — ตารางงานแบบแบ่งหน้า (รองรับลิสต์ขนาดใหญ่ไม่จำกัดจำนวนแถว)
+# ---------------------------------------------------------------------
+# วิธีแบ่งหน้าแบบ delegate ได้ ("keyset paging"):
+#   หน้าแรก  : Filter(Tasks, ... , ID > 0)                  เรียงตาม ID น้อยไปมาก เอา 50 แถวแรก
+#   หน้าถัดไป: Filter(Tasks, ... , ID > ไอดีสุดท้ายของหน้าก่อน)
+#   หน้าก่อน : ดึงค่า cursor เดิมออกจาก colCursors
+# ทุกเงื่อนไขเป็น = / > / StartsWith บนคอลัมน์ที่ index แล้ว จึง delegate ได้ทั้งหมด
+#
+# ข้อจำกัดที่บอกผู้ใช้ตรง ๆ: การ "เรียงลำดับ" ข้ามทุกหน้าทำได้เฉพาะตามลำดับการสร้าง (ID)
+# ส่วนหัวคอลัมน์อื่นจะเรียงเฉพาะ 50 แถวในหน้าปัจจุบัน ข้อความบนหน้าจอระบุเรื่องนี้ไว้แล้ว
+# SharePoint ไม่มีคำสั่งข้ามแถว (skip/offset) ที่ delegate ได้ จึงทำแบบอื่นไม่ได้
+# =====================================================================
+Screens:
+  scrTable:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Table");
+         Set(gblPageSize, 50);
+         Set(gblCursor, 0);
+         Clear(colCursors);
+         Set(gblPageNo, 1);
+         Select(btnLoadPage)
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Table"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="ตารางงาน"
+            SubtitleText: ="แบ่งหน้าละ 50 รายการ ดึงจาก SharePoint ทีละหน้า"
+            OnRefresh: =Select(btnLoadPage)
+
+      # ---------- แถบค้นหาเฉพาะหน้านี้ ----------
+      - txtSearch:
+          Control: Classic/TextInput
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad
+            Width: =360
+            Height: =uTap
+            HintText: ="ค้นหาจากชื่องาน (ขึ้นต้นด้วย...)"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="ค้นหาชื่องานที่ขึ้นต้นด้วยข้อความนี้"
+
+      - lblSearchNote:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 388
+            Y: =uHeaderH + uPad
+            Width: =420
+            Height: =uTap
+            Text: ="ค้นหาแบบ ""ขึ้นต้นด้วย"" เพื่อให้ค้นได้ครบทุกแถวแม้ข้อมูลเกินหมื่นรายการ"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+            VerticalAlign: =VerticalAlign.Middle
+
+      - btnLoadPage:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 820
+            Y: =uHeaderH + uPad
+            Width: =160
+            Height: =uTap
+            Text: ="ค้นหา"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="ค้นหาและโหลดหน้าปัจจุบัน"
+            OnSelect: |
+              =If(gblDeptFilter = txtAllDept,
+                  ClearCollect(colPage,
+                      FirstN(
+                          SortByColumns(
+                              Filter(Tasks,
+                                  ID > gblCursor,
+                                  StartsWith(Title, txtSearch.Text),
+                                  StatusKey = Coalesce(gblStatusFilter, StatusKey)
+                              ),
+                              "ID", SortOrder.Ascending
+                          ),
+                          gblPageSize
+                      )
+                  ),
+                  ClearCollect(colPage,
+                      FirstN(
+                          SortByColumns(
+                              Filter(Tasks,
+                                  Department = gblDeptFilter,
+                                  ID > gblCursor,
+                                  StartsWith(Title, txtSearch.Text),
+                                  StatusKey = Coalesce(gblStatusFilter, StatusKey)
+                              ),
+                              "ID", SortOrder.Ascending
+                          ),
+                          gblPageSize
+                      )
+                  )
+               )
+
+      # ---------- หัวตาราง ----------
+      - recHead:
+          Control: Rectangle
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad + 60
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =48
+            Fill: =clrNavy
+
+      - galHead:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =recHead.X
+            Y: =recHead.Y
+            Width: =recHead.Width
+            Height: =48
+            TemplateSize: =recHead.Width / 6
+            TemplatePadding: =0
+            ShowScrollbar: =false
+            Items: |
+              =Table(
+                  { Col: "ชื่องาน",       F: "Title" },
+                  { Col: "โปรเจกต์",      F: "ProjectTitle" },
+                  { Col: "ผู้รับผิดชอบ",  F: "AssignedToEmail" },
+                  { Col: "วันเริ่ม",      F: "StartDate" },
+                  { Col: "กำหนดส่ง",      F: "DueDate" },
+                  { Col: "สถานะ",         F: "StatusKey" }
+              )
+          Children:
+            - btnHeadCol:
+                Control: Classic/Button
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =48
+                  Text: =ThisItem.Col
+                  Align: =Align.Left
+                  PaddingLeft: =12
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrWhite
+                  Fill: =clrNavy
+                  HoverFill: =ColorValue("#0B3A68")
+                  BorderThickness: =0
+                  AccessibleLabel: ="เรียงตาม " & ThisItem.Col & " เฉพาะในหน้านี้"
+                  OnSelect: |
+                    =If(gblSortField = ThisItem.F,
+                        Set(gblSortAsc, !gblSortAsc),
+                        Set(gblSortField, ThisItem.F); Set(gblSortAsc, true))
+
+      # ---------- เนื้อตาราง ----------
+      - galRows:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =recHead.X
+            Y: =recHead.Y + 48
+            Width: =recHead.Width
+            Height: =768 - (recHead.Y + 48) - 76
+            TemplateSize: =52
+            TemplatePadding: =0
+            ShowScrollbar: =true
+            Items: |
+              =SortByColumns(colPage,
+                  Coalesce(gblSortField, "ID"),
+                  If(Coalesce(gblSortAsc, true), SortOrder.Ascending, SortOrder.Descending))
+          Children:
+            - recRow:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =50
+                  Fill: =clrSurface
+            - lblC1:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =0
+                  Width: =Parent.TemplateWidth / 6 - 16
+                  Height: =50
+                  Text: =ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblC2:
+                Control: Label
+                Properties:
+                  X: =Parent.TemplateWidth / 6 + 12
+                  Y: =0
+                  Width: =Parent.TemplateWidth / 6 - 16
+                  Height: =50
+                  Text: =ThisItem.ProjectTitle
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblC3:
+                Control: Label
+                Properties:
+                  X: =Parent.TemplateWidth / 6 * 2 + 12
+                  Y: =0
+                  Width: =Parent.TemplateWidth / 6 - 16
+                  Height: =50
+                  Text: =ThisItem.AssignedToEmail
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblC4:
+                Control: Label
+                Properties:
+                  X: =Parent.TemplateWidth / 6 * 3 + 12
+                  Y: =0
+                  Width: =Parent.TemplateWidth / 6 - 16
+                  Height: =50
+                  Text: =Text(ThisItem.StartDate, "d mmm yyyy", "en-US")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblC5:
+                Control: Label
+                Properties:
+                  X: =Parent.TemplateWidth / 6 * 4 + 12
+                  Y: =0
+                  Width: =Parent.TemplateWidth / 6 - 16
+                  Height: =50
+                  Text: =Text(ThisItem.DueDate, "d mmm yyyy", "en-US")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: |
+                    =If(ThisItem.StatusKey <> "Done" && ThisItem.DueDate < gblToday,
+                        clrOverdue, clrTextMain)
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblC6:
+                Control: Label
+                Properties:
+                  X: =Parent.TemplateWidth / 6 * 5 + 12
+                  Y: =10
+                  Width: =Parent.TemplateWidth / 6 - 24
+                  Height: =32
+                  Text: =Coalesce(LookUp(tblStatus, Key = ThisItem.StatusKey, Label), "ไม่ระบุ")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrWhite
+                  Fill: =Coalesce(LookUp(tblStatus, Key = ThisItem.StatusKey, Color), clrStNotStarted)
+                  Align: =Align.Center
+                  VerticalAlign: =VerticalAlign.Middle
+            - recRowLine:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =50
+                  Width: =Parent.TemplateWidth
+                  Height: =1
+                  Fill: =clrBorder
+
+      # ---------- แถบเลื่อนหน้า ----------
+      - btnPrevPage:
+          Control: Classic/Button
+          Properties:
+            X: =recHead.X
+            Y: =768 - 64
+            Width: =180
+            Height: =uTap
+            Text: ="< หน้าก่อนหน้า"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            DisplayMode: =If(gblPageNo > 1, DisplayMode.Edit, DisplayMode.Disabled)
+            AccessibleLabel: ="ไปหน้าก่อนหน้า"
+            OnSelect: |
+              =Set(gblCursor, Coalesce(Last(colCursors).Cur, 0));
+               RemoveIf(colCursors, Cur = Last(colCursors).Cur);
+               Set(gblPageNo, gblPageNo - 1);
+               Select(btnLoadPage)
+
+      - lblPageNo:
+          Control: Label
+          Properties:
+            X: =recHead.X + 192
+            Y: =768 - 64
+            Width: =300
+            Height: =uTap
+            Text: |
+              ="หน้า " & Text(gblPageNo) & "  ·  แสดง " & Text(CountRows(colPage)) & " รายการ"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            VerticalAlign: =VerticalAlign.Middle
+
+      - btnNextPage:
+          Control: Classic/Button
+          Properties:
+            X: =recHead.X + 500
+            Y: =768 - 64
+            Width: =180
+            Height: =uTap
+            Text: ="หน้าถัดไป >"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            DisplayMode: =If(CountRows(colPage) = gblPageSize, DisplayMode.Edit, DisplayMode.Disabled)
+            AccessibleLabel: ="ไปหน้าถัดไป"
+            OnSelect: |
+              =Collect(colCursors, { Cur: gblCursor });
+               Set(gblCursor, Last(SortByColumns(colPage, "ID", SortOrder.Ascending)).ID);
+               Set(gblPageNo, gblPageNo + 1);
+               Select(btnLoadPage)
+
+      - lblSortNote:
+          Control: Label
+          Properties:
+            X: =recHead.X + 700
+            Y: =768 - 64
+            Width: =recHead.Width - 700
+            Height: =uTap
+            Text: ="การกดหัวคอลัมน์จะเรียงเฉพาะ 50 รายการในหน้านี้ ลำดับข้ามหน้าเรียงตามลำดับการสร้าง"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+            VerticalAlign: =VerticalAlign.Middle

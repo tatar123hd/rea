@@ -1,0 +1,154 @@
+# =====================================================================
+# cmpSidebar — แถบเมนูด้านซ้าย (ใช้ทุกหน้าจอ)
+# ---------------------------------------------------------------------
+# Custom properties ที่ต้องสร้าง (Tree view -> คอมโพเนนต์ -> New custom property)
+#
+#   ชื่อ          | Property type | Data type | ค่าเริ่มต้น
+#   --------------|---------------|-----------|---------------
+#   ActiveView    | Input         | Text      | "Timeline"
+#   OnNav         | Behavior      | -         | (ว่าง)
+#
+# ต้องเปิด Access app scope = On
+# ขนาดคอมโพเนนต์: Width 240, Height 768
+# =====================================================================
+ComponentDefinitions:
+  cmpSidebar:
+    DefinitionType: CanvasComponent
+    Properties:
+      Height: =768
+      Width: =uSidebarW
+      Fill: =clrNavy
+    CustomProperties:
+      ActiveView:
+        PropertyKind: Input
+        DataType: Text
+        Default: ="Timeline"
+      OnNav:
+        PropertyKind: Event
+        ReturnType: None
+    Children:
+      - lblBrand:
+          Control: Label
+          Properties:
+            X: =uPad
+            Y: =20
+            Width: =uSidebarW - (uPad * 2)
+            Height: =40
+            Text: ="ติดตามโปรเจกต์"
+            Font: =fntMain
+            Size: =szH2
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            VerticalAlign: =VerticalAlign.Middle
+
+      - lblBrandSub:
+          Control: Label
+          Properties:
+            X: =uPad
+            Y: =60
+            Width: =uSidebarW - (uPad * 2)
+            Height: =24
+            Text: ="และตารางอบรม BAU"
+            Font: =fntMain
+            Size: =szBody
+            Color: =ColorValue("#B9C8DE")
+
+      - galNav:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =0
+            Y: =104
+            Width: =uSidebarW
+            Height: =9 * (uTap + 4)
+            TemplateSize: =uTap + 4
+            TemplatePadding: =0
+            ShowScrollbar: =false
+            Items: |
+              =Filter(
+                  Table(
+                      { Key: "Timeline",  Label: "ไทม์ไลน์",        Ico: Icon.Trending,   AdminOnly: false },
+                      { Key: "Dashboard", Label: "ภาพรวม",          Ico: Icon.Shop,       AdminOnly: false },
+                      { Key: "Board",     Label: "กระดานงาน",      Ico: Icon.Items,      AdminOnly: false },
+                      { Key: "Table",     Label: "ตาราง",           Ico: Icon.DetailList, AdminOnly: false },
+                      { Key: "Calendar",  Label: "ปฏิทิน",          Ico: Icon.CalendarBlank, AdminOnly: false },
+                      { Key: "MyTasks",   Label: "งานของฉัน",      Ico: Icon.CheckBadge, AdminOnly: false },
+                      { Key: "Skills",    Label: "ทักษะและความสนใจ", Ico: Icon.People,   AdminOnly: false },
+                      { Key: "Help",      Label: "คู่มือการใช้งาน",  Ico: Icon.Help,      AdminOnly: false },
+                      { Key: "Admin",     Label: "ผู้ดูแลระบบ",     Ico: Icon.Settings,  AdminOnly: true }
+                  ),
+                  !AdminOnly || gblIsAdmin
+              )
+          Children:
+            - btnNavItem:
+                Control: Classic/Button
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =uSidebarW
+                  Height: =uTap
+                  Text: =""
+                  Fill: =If(cmpSidebar.ActiveView = ThisItem.Key, clrPrimary, clrNavy)
+                  HoverFill: =If(cmpSidebar.ActiveView = ThisItem.Key, clrPrimary, ColorValue("#0B3A68"))
+                  PressedFill: =clrPrimaryDk
+                  BorderThickness: =0
+                  AccessibleLabel: =ThisItem.Label
+                  OnSelect: |
+                    =Set(gblNavTarget, ThisItem.Key);
+                     cmpSidebar.OnNav()
+
+            - icoNav:
+                Control: Classic/Icon
+                Properties:
+                  Icon: =ThisItem.Ico
+                  X: =uPad
+                  Y: =10
+                  Width: =24
+                  Height: =24
+                  Color: =clrWhite
+                  DisplayMode: =DisplayMode.Disabled
+
+            - lblNav:
+                Control: Label
+                Properties:
+                  X: =uPad + 36
+                  Y: =0
+                  Width: =uSidebarW - uPad - 44
+                  Height: =uTap
+                  Text: =ThisItem.Label
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =If(cmpSidebar.ActiveView = ThisItem.Key, FontWeight.Semibold, FontWeight.Normal)
+                  Color: =clrWhite
+                  VerticalAlign: =VerticalAlign.Middle
+                  DisplayMode: =DisplayMode.Disabled
+
+      - lblUser:
+          Control: Label
+          Properties:
+            X: =uPad
+            Y: =Parent.Height - 92
+            Width: =uSidebarW - (uPad * 2)
+            Height: =48
+            Text: |
+              =gblUserName & Char(10) &
+               If(gblDeptMissing, "ไม่พบข้อมูลแผนก", gblUserDept)
+            Font: =fntMain
+            Size: =szBody
+            Color: =ColorValue("#B9C8DE")
+
+      - lblAdminTag:
+          Control: Label
+          Properties:
+            X: =uPad
+            Y: =Parent.Height - 40
+            Width: =uSidebarW - (uPad * 2)
+            Height: =28
+            Visible: =gblIsAdmin
+            Text: ="ผู้ดูแลระบบ"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =clrPrimary
+            Align: =Align.Center
+            VerticalAlign: =VerticalAlign.Middle

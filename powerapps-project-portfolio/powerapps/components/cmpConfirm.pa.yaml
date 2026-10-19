@@ -1,0 +1,143 @@
+# =====================================================================
+# cmpConfirm — กล่องยืนยันก่อนลบ (ใช้ทุกครั้งที่มีการลบ ตามข้อกำหนด)
+# ---------------------------------------------------------------------
+# Custom properties
+#   ชื่อ          | Property type | Data type | ค่าเริ่มต้น
+#   --------------|---------------|-----------|-------------------
+#   IsOpen        | Input         | Boolean   | false
+#   TitleText     | Input         | Text      | "ยืนยันการลบ"
+#   BodyText      | Input         | Text      | ""
+#   ConfirmText   | Input         | Text      | "ลบถาวร"
+#   OnConfirm     | Behavior      | -         | (ว่าง)
+#   OnCancel      | Behavior      | -         | (ว่าง)
+#
+# ขนาด: เท่าหน้าจอ (Width 1366, Height 768) เพราะมีฉากหลังทึบคลุมทั้งจอ
+# วางไว้เป็นคอนโทรลตัวบนสุดของหน้าจอเสมอ
+# =====================================================================
+ComponentDefinitions:
+  cmpConfirm:
+    DefinitionType: CanvasComponent
+    Properties:
+      Height: =768
+      Width: =1366
+      Fill: =RGBA(0, 0, 0, 0)
+    CustomProperties:
+      IsOpen:
+        PropertyKind: Input
+        DataType: Boolean
+        Default: =false
+      TitleText:
+        PropertyKind: Input
+        DataType: Text
+        Default: ="ยืนยันการลบ"
+      BodyText:
+        PropertyKind: Input
+        DataType: Text
+        Default: =""
+      ConfirmText:
+        PropertyKind: Input
+        DataType: Text
+        Default: ="ลบถาวร"
+      OnConfirm:
+        PropertyKind: Event
+        ReturnType: None
+      OnCancel:
+        PropertyKind: Event
+        ReturnType: None
+    Children:
+      - recScrim:
+          Control: Rectangle
+          Properties:
+            X: =0
+            Y: =0
+            Width: =Parent.Width
+            Height: =Parent.Height
+            Fill: =RGBA(0, 0, 0, 0.45)
+            Visible: =cmpConfirm.IsOpen
+
+      - recDialog:
+          Control: Rectangle
+          Properties:
+            X: =(Parent.Width - 560) / 2
+            Y: =(Parent.Height - 300) / 2
+            Width: =560
+            Height: =300
+            Fill: =clrWhite
+            Visible: =cmpConfirm.IsOpen
+
+      - icoWarn:
+          Control: Classic/Icon
+          Properties:
+            Icon: =Icon.Warning
+            X: =recDialog.X + 24
+            Y: =recDialog.Y + 24
+            Width: =32
+            Height: =32
+            Color: =clrStBlocked
+            Visible: =cmpConfirm.IsOpen
+            DisplayMode: =DisplayMode.Disabled
+
+      - lblConfirmTitle:
+          Control: Label
+          Properties:
+            X: =recDialog.X + 68
+            Y: =recDialog.Y + 22
+            Width: =recDialog.Width - 92
+            Height: =36
+            Text: =cmpConfirm.TitleText
+            Font: =fntMain
+            Size: =szH2
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+            Visible: =cmpConfirm.IsOpen
+
+      - lblConfirmBody:
+          Control: Label
+          Properties:
+            X: =recDialog.X + 24
+            Y: =recDialog.Y + 72
+            Width: =recDialog.Width - 48
+            Height: =132
+            Text: =cmpConfirm.BodyText
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Visible: =cmpConfirm.IsOpen
+
+      - btnCancel:
+          Control: Classic/Button
+          Properties:
+            X: =recDialog.X + 24
+            Y: =recDialog.Y + recDialog.Height - 68
+            Width: =200
+            Height: =uTap
+            Text: ="ยกเลิก"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            HoverFill: =clrBg
+            Visible: =cmpConfirm.IsOpen
+            AccessibleLabel: ="ยกเลิก ไม่ลบข้อมูล"
+            OnSelect: =cmpConfirm.OnCancel()
+
+      - btnConfirm:
+          Control: Classic/Button
+          Properties:
+            X: =recDialog.X + recDialog.Width - 224
+            Y: =recDialog.Y + recDialog.Height - 68
+            Width: =200
+            Height: =uTap
+            Text: =cmpConfirm.ConfirmText
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrStBlocked
+            HoverFill: =ColorValue("#8E1D17")
+            BorderThickness: =0
+            Visible: =cmpConfirm.IsOpen
+            AccessibleLabel: =cmpConfirm.ConfirmText
+            OnSelect: =cmpConfirm.OnConfirm()

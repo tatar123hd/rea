@@ -1,0 +1,140 @@
+# =====================================================================
+# cmpTimelineBar — แถบ Gantt หนึ่งแถบ (ใช้ภายใน gallery ของหน้าไทม์ไลน์)
+# ---------------------------------------------------------------------
+# แนวคิด: คอมโพเนนต์กว้างเท่ากับ "รางเวลา" ทั้งราง ส่วนแถบสีข้างในคำนวณตำแหน่งเอง
+#         จึงไม่ต้องให้หน้าจอคำนวณ X/Width ของอินสแตนซ์
+#
+# Custom properties
+#   ชื่อ         | Property type | Data type | ค่าเริ่มต้น
+#   -------------|---------------|-----------|------------
+#   BarStart     | Input         | DateTime  | Today()
+#   BarEnd       | Input         | DateTime  | Today()
+#   WinStart     | Input         | DateTime  | Today()
+#   WinDays      | Input         | Number    | 30
+#   TrackWidth   | Input         | Number    | 800
+#   BarColor     | Input         | Color     | ColorValue("#0064FF")
+#   IsOverdue    | Input         | Boolean   | false
+#   IsDim        | Input         | Boolean   | false   (ใช้กับ BAU สถานะ "รอยืนยัน")
+#   LabelText    | Input         | Text      | ""
+#   OnSelectBar  | Behavior      | -         | (ว่าง)
+#
+# ขนาด: Width = TrackWidth, Height = 44
+#
+# สูตรคำนวณ (หนึ่งเดียวทั้งแอป):
+#   วันเริ่มที่มองเห็น = ถ้า BarStart ก่อนหน้าต่าง ให้ใช้ขอบซ้ายของหน้าต่าง
+#   วันจบที่มองเห็น   = ถ้า BarEnd หลังหน้าต่าง  ให้ใช้ขอบขวาของหน้าต่าง
+#   X     = (จำนวนวันจากขอบซ้าย / จำนวนวันในหน้าต่าง) * ความกว้างราง
+#   Width = ((จำนวนวันที่มองเห็น + 1) / จำนวนวันในหน้าต่าง) * ความกว้างราง  (อย่างน้อย 8 พิกเซล)
+# =====================================================================
+ComponentDefinitions:
+  cmpTimelineBar:
+    DefinitionType: CanvasComponent
+    Properties:
+      Height: =uRow
+      Width: =cmpTimelineBar.TrackWidth
+      Fill: =RGBA(0, 0, 0, 0)
+    CustomProperties:
+      BarStart:
+        PropertyKind: Input
+        DataType: DateAndTime
+        Default: =Today()
+      BarEnd:
+        PropertyKind: Input
+        DataType: DateAndTime
+        Default: =Today()
+      WinStart:
+        PropertyKind: Input
+        DataType: DateAndTime
+        Default: =Today()
+      WinDays:
+        PropertyKind: Input
+        DataType: Number
+        Default: =30
+      TrackWidth:
+        PropertyKind: Input
+        DataType: Number
+        Default: =800
+      BarColor:
+        PropertyKind: Input
+        DataType: Color
+        Default: =ColorValue("#0064FF")
+      IsOverdue:
+        PropertyKind: Input
+        DataType: Boolean
+        Default: =false
+      IsDim:
+        PropertyKind: Input
+        DataType: Boolean
+        Default: =false
+      LabelText:
+        PropertyKind: Input
+        DataType: Text
+        Default: =""
+      OnSelectBar:
+        PropertyKind: Event
+        ReturnType: None
+    Children:
+      - btnBar:
+          Control: Classic/Button
+          Properties:
+            Visible: |
+              =!IsBlank(cmpTimelineBar.BarStart) && !IsBlank(cmpTimelineBar.BarEnd)
+               && cmpTimelineBar.BarEnd >= cmpTimelineBar.WinStart
+            X: |
+              =RoundDown(
+                  DateDiff(
+                      cmpTimelineBar.WinStart,
+                      If(cmpTimelineBar.BarStart < cmpTimelineBar.WinStart,
+                         cmpTimelineBar.WinStart,
+                         cmpTimelineBar.BarStart),
+                      TimeUnit.Days
+                  ) / Max(cmpTimelineBar.WinDays, 1) * cmpTimelineBar.TrackWidth,
+                  0
+               )
+            Y: =6
+            Width: |
+              =Max(8,
+                  RoundDown(
+                      (DateDiff(
+                          If(cmpTimelineBar.BarStart < cmpTimelineBar.WinStart,
+                             cmpTimelineBar.WinStart,
+                             cmpTimelineBar.BarStart),
+                          If(cmpTimelineBar.BarEnd > DateAdd(cmpTimelineBar.WinStart, cmpTimelineBar.WinDays - 1, TimeUnit.Days),
+                             DateAdd(cmpTimelineBar.WinStart, cmpTimelineBar.WinDays - 1, TimeUnit.Days),
+                             cmpTimelineBar.BarEnd),
+                          TimeUnit.Days
+                      ) + 1) / Max(cmpTimelineBar.WinDays, 1) * cmpTimelineBar.TrackWidth,
+                      0
+                  )
+               )
+            Height: =uRow - 12
+            Text: =cmpTimelineBar.LabelText
+            Align: =Align.Left
+            PaddingLeft: =8
+            Font: =fntMain
+            Size: =szBody
+            Color: =If(cmpTimelineBar.IsDim, clrTextMain, clrWhite)
+            Fill: =If(cmpTimelineBar.IsDim, clrWhite, cmpTimelineBar.BarColor)
+            HoverFill: =If(cmpTimelineBar.IsDim, clrHover, cmpTimelineBar.BarColor)
+            BorderColor: =If(cmpTimelineBar.IsOverdue, clrOverdue, cmpTimelineBar.BarColor)
+            BorderThickness: =If(cmpTimelineBar.IsOverdue, 3, If(cmpTimelineBar.IsDim, 2, 0))
+            BorderStyle: =If(cmpTimelineBar.IsDim, BorderStyle.Dashed, BorderStyle.Solid)
+            AccessibleLabel: |
+              =cmpTimelineBar.LabelText & " ตั้งแต่ " &
+               Text(cmpTimelineBar.BarStart, "d mmm yyyy", "en-US") & " ถึง " &
+               Text(cmpTimelineBar.BarEnd, "d mmm yyyy", "en-US") &
+               If(cmpTimelineBar.IsOverdue, " เลยกำหนดแล้ว", "")
+            OnSelect: =cmpTimelineBar.OnSelectBar()
+
+      - icoOverdue:
+          Control: Classic/Icon
+          Properties:
+            Icon: =Icon.Warning
+            Visible: =cmpTimelineBar.IsOverdue && btnBar.Visible
+            X: =btnBar.X + btnBar.Width + 6
+            Y: =12
+            Width: =20
+            Height: =20
+            Color: =clrOverdue
+            DisplayMode: =DisplayMode.Disabled
+            AccessibleLabel: ="เลยกำหนด"

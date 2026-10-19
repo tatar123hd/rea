@@ -1,0 +1,437 @@
+# =====================================================================
+# scrAdmin — หน้าผู้ดูแลระบบ (เห็นเฉพาะคนที่อยู่ในลิสต์ AppAdmins)
+# ---------------------------------------------------------------------
+# มี 3 ส่วน
+#   1) จัดการรายชื่อผู้ดูแล
+#   2) เครื่องมือตรวจและซ่อมข้อมูล
+#   3) โอนความเป็นเจ้าของโปรเจกต์
+#
+# ข้อควรรู้: เครื่องมือซ่อมข้อมูลวนเขียนทีละแถว จึงช้าเมื่อข้อมูลเยอะ
+#            และทำได้ครั้งละไม่เกิน 2,000 แถวต่อลิสต์ (ข้อจำกัดของ Power Apps)
+#            หน้าจอแสดงจำนวนที่เหลือให้กดซ้ำได้จนหมด
+# =====================================================================
+Screens:
+  scrAdmin:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Admin");
+         If(!gblIsAdmin, Navigate(scrTimeline));
+         ClearCollect(colAdmins, AppAdmins);
+         Set(gblAdminMsg, "")
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Admin"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="ผู้ดูแลระบบ"
+            SubtitleText: ="จัดการผู้ดูแล ตรวจสอบความถูกต้องของข้อมูล และโอนความเป็นเจ้าของ"
+            OnRefresh: =ClearCollect(colAdmins, AppAdmins)
+
+      # ================= 1) รายชื่อผู้ดูแล =================
+      - lblSecAdmin:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad
+            Width: =400
+            Height: =36
+            Text: ="1. รายชื่อผู้ดูแล"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - cboNewAdmin:
+          Control: Classic/ComboBox
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblSecAdmin.Y + 44
+            Width: =280
+            Height: =uTap
+            Items: |
+              =Office365Users.SearchUserV2({ searchTerm: cboNewAdmin.SearchText, top: 15 }).value
+            DisplayFields: =["displayName"]
+            SearchFields: =["displayName"]
+            SelectMultiple: =false
+            InputTextPlaceholder: ="เลือกคนที่จะเพิ่มเป็นผู้ดูแล"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="เลือกผู้ใช้ที่จะเพิ่มเป็นผู้ดูแล"
+
+      - btnAddAdmin:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + uPad + 292
+            Y: =lblSecAdmin.Y + 44
+            Width: =120
+            Height: =uTap
+            DisplayMode: =If(IsBlank(cboNewAdmin.Selected.mail), DisplayMode.Disabled, DisplayMode.Edit)
+            Text: ="เพิ่ม"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="เพิ่มผู้ดูแลคนนี้"
+            OnSelect: |
+              =If(!IsBlank(LookUp(AppAdmins, Email = Lower(cboNewAdmin.Selected.mail))),
+                  Set(gblAdminMsg, "คนนี้เป็นผู้ดูแลอยู่แล้ว"),
+                  Patch(AppAdmins, Defaults(AppAdmins),
+                      {
+                          Title: cboNewAdmin.Selected.displayName,
+                          Email: Lower(cboNewAdmin.Selected.mail),
+                          PersonUser: {
+                              Claims:      "i:0#.f|membership|" & Lower(cboNewAdmin.Selected.mail),
+                              DisplayName: cboNewAdmin.Selected.displayName,
+                              Email:       Lower(cboNewAdmin.Selected.mail),
+                              Department:  "",
+                              JobTitle:    "",
+                              Picture:     ""
+                          }
+                      });
+                  ClearCollect(colAdmins, AppAdmins);
+                  Set(gblAdminMsg,
+                      "เพิ่มเรียบร้อยแล้ว อย่าลืมเพิ่มคนนี้เข้ากลุ่ม PP_Admins ใน SharePoint ด้วย ไม่เช่นนั้นจะบันทึกข้อมูลไม่ได้")
+               )
+
+      - galAdmins:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblSecAdmin.Y + 100
+            Width: =412
+            Height: =240
+            TemplateSize: =uTap + 8
+            ShowScrollbar: =true
+            Items: =colAdmins
+          Children:
+            - recAd:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =412
+                  Height: =uTap
+                  Fill: =clrSurface
+                  BorderColor: =clrBorder
+                  BorderThickness: =1
+            - lblAdEmail:
+                Control: Label
+                Properties:
+                  X: =12
+                  Y: =0
+                  Width: =340
+                  Height: =uTap
+                  Text: =ThisItem.Email
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - icoAdDel:
+                Control: Classic/Icon
+                Properties:
+                  Icon: =Icon.Trash
+                  X: =360
+                  Y: =0
+                  Width: =uTap
+                  Height: =uTap
+                  Color: =clrStBlocked
+                  DisplayMode: =If(ThisItem.Email = gblUserEmail, DisplayMode.Disabled, DisplayMode.Edit)
+                  AccessibleLabel: ="ถอดสิทธิ์ผู้ดูแลของ " & ThisItem.Email
+                  OnSelect: |
+                    =Set(gblEditAdmin, ThisItem);
+                     Set(gblConfirmAction, "DeleteAdmin");
+                     Set(gblConfirmTitle, "ถอดสิทธิ์ผู้ดูแล?");
+                     Set(gblConfirmBody, "จะถอดสิทธิ์ผู้ดูแลของ " & ThisItem.Email);
+                     Set(gblConfirmOpen, true)
+
+      # ================= 2) เครื่องมือตรวจและซ่อม =================
+      - lblSecTools:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 452
+            Y: =uHeaderH + uPad
+            Width: =440
+            Height: =36
+            Text: ="2. ตรวจสอบและซ่อมข้อมูล"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - btnRepair:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 452
+            Y: =lblSecTools.Y + 44
+            Width: =440
+            Height: =uTap
+            Text: ="ซ่อมข้อมูลอ้างอิง (ชื่อโปรเจกต์ / แผนก / เจ้าของ)"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            HoverFill: =clrHover
+            AccessibleLabel: ="เขียนค่าที่เก็บซ้ำในลิสต์ลูกให้ตรงกับลิสต์แม่"
+            OnSelect: |
+              =Set(gblAdminMsg, "กำลังซ่อมข้อมูล กรุณารอสักครู่...");
+               ForAll(Projects As p,
+                   ForAll(Filter(Phases, ProjectID = p.ID) As ph,
+                       Patch(Phases, LookUp(Phases, ID = ph.ID),
+                           {
+                               ProjectTitle: p.Title,
+                               Department:   p.Department,
+                               OwnerEmail:   Lower(p.OwnerEmail)
+                           })
+                   );
+                   ForAll(Filter(Tasks, ProjectID = p.ID) As t,
+                       Patch(Tasks, LookUp(Tasks, ID = t.ID),
+                           {
+                               ProjectTitle: p.Title,
+                               Department:   p.Department,
+                               OwnerEmail:   Lower(p.OwnerEmail),
+                               PhaseTitle:   Coalesce(LookUp(Phases, ID = t.PhaseID, Title), t.PhaseTitle)
+                           })
+                   )
+               );
+               Set(gblAdminMsg,
+                   If(IsEmpty(Errors(Phases)) && IsEmpty(Errors(Tasks)),
+                      "ซ่อมข้อมูลเรียบร้อยแล้ว",
+                      "ซ่อมข้อมูลไม่สำเร็จบางรายการ: " & First(Errors(Tasks)).Message))
+
+      - btnFindOrphans:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 452
+            Y: =btnRepair.Y + 56
+            Width: =440
+            Height: =uTap
+            Text: ="ตรวจหางานและเฟสที่ไม่มีโปรเจกต์แม่"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            HoverFill: =clrHover
+            AccessibleLabel: ="ค้นหางานกำพร้าที่เกิดจากการลบไม่สมบูรณ์"
+            OnSelect: |
+              =ClearCollect(colProjIds, ShowColumns(Projects, "ID"));
+               ClearCollect(colOrphanPhases,
+                   Filter(Phases As ph, IsBlank(LookUp(colProjIds, ID = ph.ProjectID))));
+               ClearCollect(colOrphanTasks,
+                   Filter(Tasks As t, IsBlank(LookUp(colProjIds, ID = t.ProjectID))));
+               Set(gblAdminMsg,
+                   "พบเฟสกำพร้า " & Text(CountRows(colOrphanPhases)) &
+                   " รายการ และงานกำพร้า " & Text(CountRows(colOrphanTasks)) & " รายการ" &
+                   If(CountRows(colOrphanTasks) >= 2000 || CountRows(colOrphanPhases) >= 2000,
+                      " (ตรวจได้ครั้งละไม่เกิน 2,000 แถว กดซ้ำหลังลบเพื่อตรวจต่อ)", ""))
+
+      - btnDeleteOrphans:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 452
+            Y: =btnFindOrphans.Y + 56
+            Width: =440
+            Height: =uTap
+            DisplayMode: |
+              =If(IsEmpty(colOrphanPhases) && IsEmpty(colOrphanTasks),
+                  DisplayMode.Disabled, DisplayMode.Edit)
+            Text: ="ลบรายการกำพร้าที่พบ"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrStBlocked
+            Fill: =clrWhite
+            BorderColor: =clrStBlocked
+            BorderThickness: =2
+            DisabledColor: =clrTextMuted
+            DisabledBorderColor: =clrBorder
+            AccessibleLabel: ="ลบรายการกำพร้าทั้งหมดที่ตรวจพบ"
+            OnSelect: |
+              =Set(gblConfirmAction, "DeleteOrphans");
+               Set(gblConfirmTitle, "ลบรายการกำพร้า?");
+               Set(gblConfirmBody,
+                   "จะลบเฟส " & Text(CountRows(colOrphanPhases)) & " รายการ และงาน " &
+                   Text(CountRows(colOrphanTasks)) & " รายการ" & Char(10) & "การลบนี้ย้อนกลับไม่ได้");
+               Set(gblConfirmOpen, true)
+
+      - btnCheckDept:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 452
+            Y: =btnDeleteOrphans.Y + 56
+            Width: =440
+            Height: =uTap
+            Text: ="ดูค่าแผนกทั้งหมดที่พบในข้อมูล"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            HoverFill: =clrHover
+            AccessibleLabel: ="แสดงค่าแผนกทั้งหมด เพื่อตรวจว่าสะกดตรงกันหรือไม่"
+            OnSelect: |
+              =ClearCollect(colDeptAudit,
+                  SortByColumns(Distinct(Projects, Department), "Value", SortOrder.Ascending));
+               Set(gblAdminMsg,
+                   "ค่าแผนกที่พบ: " & Concat(colDeptAudit, Value, " | ") & Char(10) &
+                   "ถ้าเห็นค่าที่หมายถึงแผนกเดียวกันแต่สะกดต่างกัน ให้ประสานฝ่ายไอทีแก้ที่โปรไฟล์ Microsoft 365")
+
+      - lblAdminMsg:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblAdminMsg)
+            X: =uSidebarW + 452
+            Y: =btnCheckDept.Y + 56
+            Width: =440
+            Height: =140
+            Text: =gblAdminMsg
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWarnText
+            Fill: =clrWarnBg
+            PaddingLeft: =12
+            PaddingTop: =10
+
+      # ================= 3) โอนความเป็นเจ้าของ =================
+      - lblSecOwner:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 912
+            Y: =uHeaderH + uPad
+            Width: =420
+            Height: =36
+            Text: ="3. โอนความเป็นเจ้าของโปรเจกต์"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - lblOwnerNote:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 912
+            Y: =lblSecOwner.Y + 38
+            Width: =420
+            Height: =76
+            Text: ="ใช้เมื่อเจ้าของเดิมลาออกหรือย้ายงาน แอปจะใช้ค่าเจ้าของใหม่ในการตัดสินสิทธิ์ แต่ที่ SharePoint ผู้สร้างเดิมยังเป็น Created By อยู่ จึงแก้ผ่านหน้าลิสต์โดยตรงไม่ได้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+
+      - ddOwnerProj:
+          Control: Classic/DropDown
+          Properties:
+            X: =uSidebarW + 912
+            Y: =lblOwnerNote.Y + 84
+            Width: =420
+            Height: =uTap
+            Items: =SortByColumns(ShowColumns(Projects, "ID", "Title"), "Title", SortOrder.Ascending)
+            Value: ="Title"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="เลือกโปรเจกต์ที่จะโอน"
+
+      - cboNewOwner:
+          Control: Classic/ComboBox
+          Properties:
+            X: =uSidebarW + 912
+            Y: =ddOwnerProj.Y + 56
+            Width: =420
+            Height: =uTap
+            Items: |
+              =Office365Users.SearchUserV2({ searchTerm: cboNewOwner.SearchText, top: 15 }).value
+            DisplayFields: =["displayName"]
+            SearchFields: =["displayName"]
+            SelectMultiple: =false
+            InputTextPlaceholder: ="เลือกเจ้าของใหม่"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="เลือกเจ้าของใหม่"
+
+      - btnTransfer:
+          Control: Classic/Button
+          Properties:
+            X: =uSidebarW + 912
+            Y: =cboNewOwner.Y + 56
+            Width: =420
+            Height: =uTap
+            DisplayMode: |
+              =If(IsBlank(cboNewOwner.Selected.mail) || IsBlank(ddOwnerProj.Selected.ID),
+                  DisplayMode.Disabled, DisplayMode.Edit)
+            Text: ="โอนความเป็นเจ้าของ"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            DisabledFill: =clrBorder
+            DisabledColor: =clrTextMuted
+            AccessibleLabel: ="โอนความเป็นเจ้าของโปรเจกต์ที่เลือก"
+            OnSelect: |
+              =Set(gblNewOwner, Lower(cboNewOwner.Selected.mail));
+               Set(gblXferProj, ddOwnerProj.Selected.ID);
+               Patch(Projects, LookUp(Projects, ID = gblXferProj), { OwnerEmail: gblNewOwner });
+               ForAll(Filter(Phases, ProjectID = gblXferProj) As ph,
+                   Patch(Phases, LookUp(Phases, ID = ph.ID), { OwnerEmail: gblNewOwner }));
+               ForAll(Filter(Tasks, ProjectID = gblXferProj) As t,
+                   Patch(Tasks, LookUp(Tasks, ID = t.ID), { OwnerEmail: gblNewOwner }));
+               Set(gblAdminMsg,
+                   If(IsEmpty(Errors(Projects)) && IsEmpty(Errors(Phases)) && IsEmpty(Errors(Tasks)),
+                      "โอนความเป็นเจ้าของเรียบร้อยแล้ว",
+                      "โอนไม่สำเร็จบางรายการ: " & First(Errors(Tasks)).Message))
+
+      - cmpConfirm_1:
+          Control: Component
+          ComponentName: cmpConfirm
+          Properties:
+            X: =0
+            Y: =0
+            IsOpen: =gblConfirmOpen
+            TitleText: =gblConfirmTitle
+            BodyText: =gblConfirmBody
+            ConfirmText: ="ยืนยัน"
+            OnCancel: =Set(gblConfirmOpen, false)
+            OnConfirm: |
+              =If(gblConfirmAction = "DeleteAdmin",
+                  Remove(AppAdmins, LookUp(AppAdmins, ID = gblEditAdmin.ID));
+                  ClearCollect(colAdmins, AppAdmins);
+                  Set(gblAdminMsg, "ถอดสิทธิ์เรียบร้อยแล้ว"),
+
+                  ForAll(colOrphanTasks As t, Remove(Tasks, LookUp(Tasks, ID = t.ID)));
+                  ForAll(colOrphanPhases As ph, Remove(Phases, LookUp(Phases, ID = ph.ID)));
+                  Clear(colOrphanTasks); Clear(colOrphanPhases);
+                  Set(gblAdminMsg, "ลบรายการกำพร้าเรียบร้อยแล้ว")
+               );
+               Set(gblConfirmOpen, false)

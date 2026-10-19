@@ -1,0 +1,412 @@
+// =====================================================================
+// LoadData  —  ชุดคำสั่งโหลดข้อมูลหลัก (แหล่งความจริงเดียวของการโหลด)
+// ---------------------------------------------------------------------
+// ต้องวางข้อความนี้ "เหมือนกันทุกตัวอักษร" ใน 2 ที่:
+//   1) ท้าย App.OnStart                      (โหลดรอบแรกตอนเปิดแอป)
+//   2) cmpFilters -> btnApply.OnSelect       (โหลดใหม่ทุกครั้งที่กดใช้ตัวกรอง)
+//
+// ทำไมต้องซ้ำ 2 ที่: Power Apps ยังไม่มี "ฟังก์ชันที่ผู้ใช้สร้างเองแบบมีผลข้างเคียง"
+// ที่ใช้ได้ทั่วแอปในทุก environment (ความสามารถ user-defined function ยังเป็น preview
+// และอาจถูกปิดอยู่) ถ้า environment ของคุณเปิดใช้ได้ ให้ย้ายทั้งก้อนนี้ไปเป็น
+//     LoadAll(): Void = { ... };
+// ใน App.Formulas แล้วเรียก LoadAll() ทั้งสองที่แทน  จะเหลือสำเนาเดียว
+// ตรวจสถานะได้ที่ Settings -> Upcoming features -> ค้นคำว่า "user-defined"
+//
+// *** จุดที่ต้องเลือกชุดสูตรตามชนิดคอลัมน์ BAU ***
+// มองหาคำว่า  <<< ชุด PERSON >>>  และ  <<< ชุด TEXT >>>  ด้านล่าง
+// เก็บไว้ชุดเดียว ลบอีกชุดทิ้ง  (ดูวิธีตรวจชนิดคอลัมน์ในไฟล์ 01 หัวข้อ 1.3)
+// =====================================================================
+
+Set(gblBusy, true);
+Set(gblToday, DateAdd(Today(), 12, TimeUnit.Hours));
+
+// ---------------------------------------------------------------------
+// ส่วน A — คำนวณหน้าต่างเวลาจากระดับซูมและวันอ้างอิง
+// ---------------------------------------------------------------------
+Set(gblWinStartD,
+    Switch(gblZoom,
+        "Week",    DateAdd(gblAnchor, -(Weekday(gblAnchor, StartOfWeek.Monday) - 1), TimeUnit.Days),
+        "Month",   Date(Year(gblAnchor), Month(gblAnchor), 1),
+        "Quarter", Date(Year(gblAnchor), (RoundDown((Month(gblAnchor) - 1) / 3, 0) * 3) + 1, 1),
+        Date(Year(gblAnchor), Month(gblAnchor), 1)
+    )
+);
+Set(gblWinEndD,
+    Switch(gblZoom,
+        "Week",    DateAdd(gblWinStartD, 6, TimeUnit.Days),
+        "Month",   DateAdd(DateAdd(gblWinStartD, 1, TimeUnit.Months), -1, TimeUnit.Days),
+        "Quarter", DateAdd(DateAdd(gblWinStartD, 3, TimeUnit.Months), -1, TimeUnit.Days),
+        DateAdd(DateAdd(gblWinStartD, 1, TimeUnit.Months), -1, TimeUnit.Days)
+    )
+);
+// ยึดเที่ยงวันเสมอ กันค่าคลาดเคลื่อน 1 วันเมื่อแปลงเป็น UTC (ไทย = UTC+7)
+Set(gblWinStart, DateAdd(gblWinStartD, 12, TimeUnit.Hours));
+Set(gblWinEnd,   DateAdd(gblWinEndD,   12, TimeUnit.Hours));
+Set(gblWinDays,  DateDiff(gblWinStartD, gblWinEndD, TimeUnit.Days) + 1);
+
+// ---------------------------------------------------------------------
+// ส่วน B — ดึงข้อมูลลิสต์ใหม่  (ทุก query ด้านล่าง delegate ได้ 100%)
+//          เงื่อนไขที่ใช้: = บน text ที่ index แล้ว, <= / >= บน date ที่ index แล้ว
+// ---------------------------------------------------------------------
+If(gblDeptFilter = txtAllDept,
+
+    // --- ทุกแผนก: พึ่งช่วงวันที่เป็นตัวจำกัดจำนวนแถว ---
+    ClearCollect(colProjects,
+        Filter(Projects, StartDate <= gblWinEnd, EndDate >= gblWinStart));
+    ClearCollect(colPhases,
+        Filter(Phases,   StartDate <= gblWinEnd, EndDate >= gblWinStart));
+    ClearCollect(colTasks,
+        Filter(Tasks,    StartDate <= gblWinEnd, DueDate >= gblWinStart));
+    ClearCollect(colProjectLookup,
+        SortByColumns(ShowColumns(Projects, "ID", "Title", "Department", "OwnerEmail"), "Title", SortOrder.Ascending)),
+
+    // --- แผนกเดียว: กรองด้วยคอลัมน์ Department ที่ index แล้วก่อน ---
+    ClearCollect(colProjects,
+        Filter(Projects, Department = gblDeptFilter, StartDate <= gblWinEnd, EndDate >= gblWinStart));
+    ClearCollect(colPhases,
+        Filter(Phases,   Department = gblDeptFilter, StartDate <= gblWinEnd, EndDate >= gblWinStart));
+    ClearCollect(colTasks,
+        Filter(Tasks,    Department = gblDeptFilter, StartDate <= gblWinEnd, DueDate >= gblWinStart));
+    ClearCollect(colProjectLookup,
+        SortByColumns(ShowColumns(Filter(Projects, Department = gblDeptFilter), "ID", "Title", "Department", "OwnerEmail"), "Title", SortOrder.Ascending))
+);
+
+// ---------------------------------------------------------------------
+// ส่วน C — ดึงข้อมูล BAU (อ่านอย่างเดียว) + ตรวจสิทธิ์อ่าน
+// ---------------------------------------------------------------------
+IfError(
+    ClearCollect(colBauRaw,
+        Filter(BAU_TMP, StartDate <= gblWinEnd, EndDate >= gblWinStart)
+    );
+    Set(gblBauReadable, true),
+
+    // ถ้าอ่านไม่ได้ (ไม่มีสิทธิ์ / ลิสต์เกิน 5,000 แถวและไม่มี index / ชื่อคอลัมน์ไม่ตรง)
+    Clear(colBauRaw);
+    Set(gblBauReadable, false)
+);
+
+// ---------------------------------------------------------------------
+// ส่วน D — จุดแปลงข้อมูล BAU ให้เป็นรูปแบบเดียว (normalize ที่ขอบเขตเดียว)
+//          ทั้งแอปใช้เฉพาะ colBau หลังจากนี้ ไม่มีที่อื่นแตะ colBauRaw อีก
+//          >>> เลือกเก็บไว้ชุดเดียว <<<
+// ---------------------------------------------------------------------
+
+// <<< ชุด PERSON  — ใช้เมื่อ Responder / LM เป็นคอลัมน์ Person or Group >>>
+ClearCollect(colBau,
+    ForAll(colBauRaw As b,
+        {
+            ID:             b.ID,
+            Title:          Coalesce(b.Title, "(ไม่มีชื่อหลักสูตร)"),
+            CourseArea:     Coalesce(Text(b.CourseArea), ""),
+            LearningType:   Coalesce(Text(b.LearningType), ""),
+            StartDate:      b.StartDate,
+            EndDate:        b.EndDate,
+            ResponderEmail: Lower(Coalesce(b.Responder.Email, "")),
+            ResponderName:  Coalesce(b.Responder.DisplayName, ""),
+            LMEmail:        Lower(Coalesce(b.LM.Email, "")),
+            LMName:         Coalesce(b.LM.DisplayName, ""),
+            BauStatus:      Coalesce(Text(b.Status.Value), "")
+        }
+    )
+);
+
+// <<< ชุด TEXT  — ใช้เมื่อ Responder / LM เป็นคอลัมน์ Single line of text (ค่าเป็นอีเมล) >>>
+// ClearCollect(colBau,
+//     ForAll(colBauRaw As b,
+//         {
+//             ID:             b.ID,
+//             Title:          Coalesce(b.Title, "(ไม่มีชื่อหลักสูตร)"),
+//             CourseArea:     Coalesce(Text(b.CourseArea), ""),
+//             LearningType:   Coalesce(Text(b.LearningType), ""),
+//             StartDate:      b.StartDate,
+//             EndDate:        b.EndDate,
+//             ResponderEmail: Lower(Trim(Coalesce(b.Responder, ""))),
+//             ResponderName:  Lower(Trim(Coalesce(b.Responder, ""))),
+//             LMEmail:        Lower(Trim(Coalesce(b.LM, ""))),
+//             LMName:         Lower(Trim(Coalesce(b.LM, ""))),
+//             BauStatus:      Coalesce(Text(b.Status), "")
+//         }
+//     )
+// );
+//
+// หมายเหตุ: ถ้าคอลัมน์ Status เป็น Single line of text ให้เปลี่ยน b.Status.Value
+// เป็น b.Status ในชุดที่คุณเลือกใช้ด้วย
+
+// ---------------------------------------------------------------------
+// ส่วน E — เติม cache อีเมล -> แผนก สำหรับคนที่เกี่ยวข้องกับ BAU
+//          เรียก Office 365 Users เฉพาะอีเมลที่ยังไม่มีใน cache (ครั้งละ 1 ครั้งต่อ session)
+// ---------------------------------------------------------------------
+ClearCollect(colBauEmails,
+    Distinct(
+        Ungroup(
+            ForAll(colBau As b,
+                Table({ Email: b.ResponderEmail }, { Email: b.LMEmail })
+            ),
+            "Value"
+        ),
+        Email
+    )
+);
+ForAll(
+    Filter(colBauEmails As e,
+        !IsBlank(e.Value),
+        IsBlank(LookUp(colProfiles, Email = e.Value))
+    ) As q,
+    Collect(colProfiles,
+        {
+            Email: q.Value,
+            Department: IfError(Text(Office365Users.UserProfileV2(q.Value).department), "")
+        }
+    )
+);
+
+// ---------------------------------------------------------------------
+// ส่วน F — กรองละเอียดในหน่วยความจำ (ชุดข้อมูลถูกจำกัดด้วยช่วงวันที่แล้ว)
+//          ส่วนนี้คือที่ที่รองรับ: หลายโปรเจกต์ / ผู้รับผิดชอบ / สถานะ / ประเภทรายการ
+// ---------------------------------------------------------------------
+ClearCollect(colProjectsF,
+    Filter(colProjects As p,
+        (IsEmpty(colSelProjects) || !IsBlank(LookUp(colSelProjects, ProjectID = p.ID))),
+        (IsBlank(gblStatusFilter) || p.StatusKey = gblStatusFilter),
+        (IsBlank(gblOwnerFilter)  || Lower(p.OwnerEmail) = gblOwnerFilter)
+    )
+);
+ClearCollect(colPhasesF,
+    Filter(colPhases As ph,
+        (IsEmpty(colSelProjects) || !IsBlank(LookUp(colSelProjects, ProjectID = ph.ProjectID))),
+        (IsBlank(gblStatusFilter) || ph.StatusKey = gblStatusFilter),
+        (IsBlank(gblOwnerFilter)  || Lower(ph.OwnerEmail) = gblOwnerFilter),
+        (IsBlank(gblPersonFilter) || Lower(ph.PersonEmail) = gblPersonFilter)
+    )
+);
+ClearCollect(colTasksF,
+    Filter(colTasks As t,
+        (IsEmpty(colSelProjects) || !IsBlank(LookUp(colSelProjects, ProjectID = t.ProjectID))),
+        (IsBlank(gblStatusFilter) || t.StatusKey = gblStatusFilter),
+        (IsBlank(gblOwnerFilter)  || Lower(t.OwnerEmail) = gblOwnerFilter),
+        (IsBlank(gblPersonFilter) || Lower(t.AssignedToEmail) = gblPersonFilter)
+    )
+);
+ClearCollect(colBauF,
+    Filter(colBau As b,
+        (gblShowCancelled || b.BauStatus <> "ยกเลิก"),
+        (IsBlank(gblCourseArea)   || b.CourseArea = gblCourseArea),
+        (IsBlank(gblLearningType) || b.LearningType = gblLearningType),
+        (IsBlank(gblBauStatus)    || b.BauStatus = gblBauStatus),
+        (IsBlank(gblPersonFilter) || b.ResponderEmail = gblPersonFilter || b.LMEmail = gblPersonFilter),
+        (gblDeptFilter = txtAllDept
+            || LookUp(colProfiles, Email = b.ResponderEmail, Department) = gblDeptFilter
+            || LookUp(colProfiles, Email = b.LMEmail, Department) = gblDeptFilter)
+    )
+);
+
+// ---------------------------------------------------------------------
+// ส่วน G — สีประจำ CourseArea (วนจานสี 8 สีตามลำดับตัวอักษร)
+// ---------------------------------------------------------------------
+ClearCollect(colAreaColors,
+    ForAll(
+        Sequence(CountRows(Distinct(colBau, CourseArea))) As s,
+        {
+            CourseArea: Last(FirstN(SortByColumns(Distinct(colBau, CourseArea), "Value", SortOrder.Ascending), s.Value)).Value,
+            Color:      LookUp(tblAreaPalette, Seq = Mod(s.Value - 1, 8), Color)
+        }
+    )
+);
+
+// ---------------------------------------------------------------------
+// ส่วน H — สร้างแถวไทม์ไลน์แบบแบน (โปรเจกต์ -> เฟส -> งาน, และเลน BAU)
+//          ทุก ForAll ต้องคืนคอลัมน์ชุดเดียวกันเป๊ะ ไม่งั้น ClearCollect จะเตือนเรื่อง schema
+// ---------------------------------------------------------------------
+ClearCollect(colTimelineRows,
+
+    // ระดับ 0 : โปรเจกต์
+    ForAll(colProjectsF As p,
+        {
+            Key:        "P" & p.ID,
+            ParentKey:  "",
+            RootKey:    "P" & p.ID,
+            SortKey:    Text(p.ID, "[$-en-US]0000000") & "-0-0000",
+            Level:      0,
+            ItemType:   "Project",
+            ItemID:     p.ID,
+            ProjectID:  p.ID,
+            Title:      p.Title,
+            SubTitle:   "เจ้าของ: " & p.OwnerEmail,
+            BarStart:   p.StartDate,
+            BarEnd:     p.EndDate,
+            StatusKey:  p.StatusKey,
+            BarColor:   IfError(ColorValue(Coalesce(p.ColorHex, "#0064FF")), clrPrimary),
+            IsOverdue:  p.StatusKey <> "Done" && p.EndDate < gblToday,
+            HasKids:    !IsEmpty(Filter(colPhasesF, ProjectID = p.ID)),
+            PersonText: p.OwnerEmail,
+            AreaText:   ""
+        }
+    ),
+
+    // ระดับ 1 : เฟส
+    ForAll(colPhasesF As ph,
+        {
+            Key:        "H" & ph.ID,
+            ParentKey:  "P" & ph.ProjectID,
+            RootKey:    "P" & ph.ProjectID,
+            SortKey:    Text(ph.ProjectID, "[$-en-US]0000000") & "-1-" & Text(Coalesce(ph.SortOrder, 0), "[$-en-US]0000"),
+            Level:      1,
+            ItemType:   "Phase",
+            ItemID:     ph.ID,
+            ProjectID:  ph.ProjectID,
+            Title:      ph.Title,
+            SubTitle:   LookUp(tblPhaseType, Key = ph.PhaseType, Label),
+            BarStart:   ph.StartDate,
+            BarEnd:     ph.EndDate,
+            StatusKey:  Coalesce(ph.StatusKey, "NotStarted"),
+            BarColor:   Coalesce(LookUp(tblStatus, Key = ph.StatusKey, Color), clrStNotStarted),
+            IsOverdue:  ph.StatusKey <> "Done" && ph.EndDate < gblToday,
+            HasKids:    !IsEmpty(Filter(colTasksF, PhaseID = ph.ID)),
+            PersonText: Coalesce(ph.PersonEmail, ""),
+            AreaText:   ""
+        }
+    ),
+
+    // ระดับ 2 : งาน
+    ForAll(colTasksF As t,
+        {
+            Key:        "T" & t.ID,
+            ParentKey:  "H" & t.PhaseID,
+            RootKey:    "P" & t.ProjectID,
+            SortKey:    Text(t.ProjectID, "[$-en-US]0000000") & "-1-"
+                        & Text(Coalesce(LookUp(colPhasesF, ID = t.PhaseID, SortOrder), 0), "[$-en-US]0000")
+                        & "-2-" & Text(t.ID, "[$-en-US]0000000"),
+            Level:      2,
+            ItemType:   "Task",
+            ItemID:     t.ID,
+            ProjectID:  t.ProjectID,
+            Title:      t.Title,
+            SubTitle:   Coalesce(LookUp(tblPriority, Key = t.PriorityKey, Label), ""),
+            BarStart:   Coalesce(t.StartDate, t.DueDate),
+            BarEnd:     Coalesce(t.DueDate, t.StartDate),
+            StatusKey:  t.StatusKey,
+            BarColor:   Coalesce(LookUp(tblStatus, Key = t.StatusKey, Color), clrStNotStarted),
+            IsOverdue:  t.StatusKey <> "Done" && t.DueDate < gblToday,
+            HasKids:    false,
+            PersonText: Coalesce(t.AssignedToEmail, ""),
+            AreaText:   ""
+        }
+    )
+);
+
+// เลน BAU (หัวเลน 1 แถว + รายการอบรมใต้เลน)
+If(gblShowBau && gblBauReadable && !IsEmpty(colBauF),
+    Collect(colTimelineRows,
+        {
+            Key:        "BAULANE",
+            ParentKey:  "",
+            RootKey:    "BAULANE",
+            SortKey:    "ZZZZZZZ-0-0000",
+            Level:      0,
+            ItemType:   "BauLane",
+            ItemID:     0,
+            ProjectID:  0,
+            Title:      "อบรม BAU (L&D TMP)",
+            SubTitle:   Text(CountRows(colBauF)) & " รายการในช่วงนี้",
+            BarStart:   Blank(),
+            BarEnd:     Blank(),
+            StatusKey:  "",
+            BarColor:   clrNavy,
+            IsOverdue:  false,
+            HasKids:    true,
+            PersonText: "",
+            AreaText:   ""
+        }
+    );
+    Collect(colTimelineRows,
+        ForAll(colBauF As b,
+            {
+                Key:        "B" & b.ID,
+                ParentKey:  "BAULANE",
+                RootKey:    "BAULANE",
+                SortKey:    "ZZZZZZZ-1-" & Text(DateDiff(gblWinStartD, b.StartDate, TimeUnit.Days), "[$-en-US]0000") & Text(b.ID, "[$-en-US]0000000"),
+                Level:      1,
+                ItemType:   "BAU",
+                ItemID:     b.ID,
+                ProjectID:  0,
+                Title:      b.Title,
+                SubTitle:   b.CourseArea & If(IsBlank(b.LearningType), "", " · " & b.LearningType),
+                BarStart:   b.StartDate,
+                BarEnd:     b.EndDate,
+                StatusKey:  "",
+                BarColor:   Coalesce(LookUp(colAreaColors, CourseArea = b.CourseArea, Color), clrNavy),
+                IsOverdue:  false,
+                HasKids:    false,
+                PersonText: b.ResponderEmail,
+                AreaText:   b.BauStatus
+            }
+        )
+    )
+);
+
+// กรองตามประเภทรายการ (ตัวกรอง "ประเภท") แล้วคำนวณแถวที่มองเห็น
+ClearCollect(colTimelineAll,
+    Filter(colTimelineRows As r,
+        (gblShowProject || r.ItemType <> "Project"),
+        (gblShowPhase   || r.ItemType <> "Phase"),
+        (gblShowTask    || r.ItemType <> "Task"),
+        (gblShowBau     || (r.ItemType <> "BAU" && r.ItemType <> "BauLane"))
+    )
+);
+
+// ---------------------------------------------------------------------
+// ส่วน I — แถวที่มองเห็นจริง (ตามการพับ/คลี่)
+//          *** ก้อนนี้ถูกใช้ซ้ำใน icoToggle.OnSelect ของ galTimeline ด้วย ***
+// ---------------------------------------------------------------------
+ClearCollect(colTimelineVisible,
+    SortByColumns(
+        Filter(colTimelineAll As r,
+            r.Level = 0
+            || (r.Level = 1 && IsBlank(LookUp(colCollapsed, Key = r.ParentKey)))
+            || (r.Level = 2
+                && IsBlank(LookUp(colCollapsed, Key = r.ParentKey))
+                && IsBlank(LookUp(colCollapsed, Key = r.RootKey)))
+        ),
+        "SortKey", SortOrder.Ascending
+    )
+);
+
+// ---------------------------------------------------------------------
+// ส่วน J — ไม้บรรทัดวันที่ด้านบนไทม์ไลน์
+// ---------------------------------------------------------------------
+Set(gblTickDays, LookUp(tblZoom, Key = gblZoom, TickDays));
+ClearCollect(colTicks,
+    ForAll(Sequence(RoundUp(gblWinDays / gblTickDays, 0)) As s,
+        {
+            Idx:    s.Value - 1,
+            TickAt: DateAdd(gblWinStartD, (s.Value - 1) * gblTickDays, TimeUnit.Days),
+            Label:  Text(DateAdd(gblWinStartD, (s.Value - 1) * gblTickDays, TimeUnit.Days), "d mmm", "en-US")
+        }
+    )
+);
+
+// ---------------------------------------------------------------------
+// ส่วน K — ตัวเลือกของตัวกรอง BAU (สร้างจากข้อมูลที่โหลดมาจริง)
+// ---------------------------------------------------------------------
+ClearCollect(colCourseAreas,
+    SortByColumns(Filter(Distinct(colBau, CourseArea), !IsBlank(Value)), "Value", SortOrder.Ascending));
+ClearCollect(colLearningTypes,
+    SortByColumns(Filter(Distinct(colBau, LearningType), !IsBlank(Value)), "Value", SortOrder.Ascending));
+ClearCollect(colBauStatuses,
+    SortByColumns(Filter(Distinct(colBau, BauStatus), !IsBlank(Value)), "Value", SortOrder.Ascending));
+ClearCollect(colDeptOptions,
+    SortByColumns(Filter(Distinct(colProfiles, Department), !IsBlank(Value)), "Value", SortOrder.Ascending));
+
+// ---------------------------------------------------------------------
+// ส่วน L — ตรวจว่าข้อมูลถูกตัดเพราะชนเพดานจำนวนแถวหรือไม่
+//          (เพดานตั้งไว้ 2000 ที่ Settings -> General -> Data row limit
+//           แอป "ไม่ได้" พึ่งค่านี้เพื่อความถูกต้อง แค่ใช้ตรวจจับว่าควรลดช่วงวันที่)
+// ---------------------------------------------------------------------
+Set(gblTruncated,
+    CountRows(colProjects) >= 2000
+    || CountRows(colPhases) >= 2000
+    || CountRows(colTasks)  >= 2000
+    || CountRows(colBauRaw) >= 2000
+);
+
+Set(gblBusy, false);

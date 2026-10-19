@@ -1,0 +1,85 @@
+# =====================================================================
+# cmpHeader — แถบหัวหน้าจอ: ชื่อหน้า + ข้อความเตือน + ปุ่มรีเฟรช
+# ---------------------------------------------------------------------
+# Custom properties
+#   ชื่อ         | Property type | Data type | ค่าเริ่มต้น
+#   -------------|---------------|-----------|------------
+#   TitleText    | Input         | Text      | "ไทม์ไลน์"
+#   SubtitleText | Input         | Text      | ""
+#   OnRefresh    | Behavior      | -         | (ว่าง)
+#
+# ขนาด: Width 1126 (= 1366 - 240), Height 72
+# ไม่ต้องเปิด Access app scope ก็ได้ ถ้าส่งค่าทุกอย่างเข้ามาทาง property
+# แต่ไฟล์นี้อ้าง gblTruncated / gblBauReadable โดยตรง จึง "ต้องเปิด"
+# =====================================================================
+ComponentDefinitions:
+  cmpHeader:
+    DefinitionType: CanvasComponent
+    Properties:
+      Height: =uHeaderH
+      Width: =1366 - uSidebarW
+      Fill: =clrSurface
+    CustomProperties:
+      TitleText:
+        PropertyKind: Input
+        DataType: Text
+        Default: ="ไทม์ไลน์"
+      SubtitleText:
+        PropertyKind: Input
+        DataType: Text
+        Default: =""
+      OnRefresh:
+        PropertyKind: Event
+        ReturnType: None
+    Children:
+      - recHeaderLine:
+          Control: Rectangle
+          Properties:
+            X: =0
+            Y: =uHeaderH - 1
+            Width: =Parent.Width
+            Height: =1
+            Fill: =clrBorder
+
+      - lblTitle:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =10
+            Width: =Parent.Width - 420
+            Height: =34
+            Text: =cmpHeader.TitleText
+            Font: =fntMain
+            Size: =szH1
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - lblSubtitle:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =42
+            Width: =Parent.Width - 420
+            Height: =24
+            Text: =cmpHeader.SubtitleText
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+
+      - btnRefresh:
+          Control: Classic/Button
+          Properties:
+            X: =Parent.Width - 180
+            Y: =14
+            Width: =160
+            Height: =uTap
+            Text: ="รีเฟรชข้อมูล"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            HoverFill: =clrHover
+            AccessibleLabel: ="รีเฟรชข้อมูลจาก SharePoint"
+            OnSelect: =cmpHeader.OnRefresh()

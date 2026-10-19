@@ -1,0 +1,257 @@
+# =====================================================================
+# scrBoard — กระดานงาน (Kanban) แยกตามสถานะ
+# ---------------------------------------------------------------------
+# ใช้ข้อมูลชุดเดียวกับไทม์ไลน์ (colTasksF) จึงไม่มี query เพิ่ม
+# การเปลี่ยนสถานะ: เขียนลง SharePoint ด้วย Patch แล้วแก้ค่าใน collection ทันที
+#                  (ไม่ต้องโหลดข้อมูลใหม่ทั้งหมด = เร็วกว่าและประหยัดกว่า)
+# สิทธิ์: ปุ่มเปลี่ยนสถานะเปิดเฉพาะเจ้าของโปรเจกต์ (เทียบจาก OwnerEmail)
+# =====================================================================
+Screens:
+  scrBoard:
+    Properties:
+      Fill: =clrBg
+      OnVisible: =Set(gblView, "Board")
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Board"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="กระดานงาน"
+            SubtitleText: ="ลากไม่ได้ ใช้ปุ่มลูกศรเพื่อย้ายสถานะ (เฉพาะเจ้าของโปรเจกต์)"
+            OnRefresh: =Select(cmpFilters_1)
+
+      - cmpFilters_1:
+          Control: Component
+          ComponentName: cmpFilters
+          Properties:
+            X: =uSidebarW
+            Y: =uHeaderH
+
+      - galColumns:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uFilterH + uPad
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =768 - uHeaderH - uFilterH - (uPad * 2)
+            TemplateSize: =(1366 - uSidebarW - (uPad * 2)) / 4
+            TemplatePadding: =8
+            ShowScrollbar: =false
+            Items: =SortByColumns(tblStatus, "Seq", SortOrder.Ascending)
+          Children:
+            - recCol:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 16
+                  Height: =Parent.Height - 16
+                  Fill: =clrSurface
+
+            - recColHead:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 16
+                  Height: =52
+                  Fill: =ThisItem.Color
+
+            - lblColTitle:
+                Control: Label
+                Properties:
+                  X: =16
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 90
+                  Height: =52
+                  Text: =ThisItem.Label
+                  Font: =fntMain
+                  Size: =szH3
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrWhite
+                  VerticalAlign: =VerticalAlign.Middle
+
+            - lblColCount:
+                Control: Label
+                Properties:
+                  X: =Parent.TemplateWidth - 74
+                  Y: =0
+                  Width: =58
+                  Height: =52
+                  Text: =Text(CountRows(Filter(colTasksF, StatusKey = ThisItem.Key)))
+                  Font: =fntMain
+                  Size: =szH3
+                  Color: =clrWhite
+                  Align: =Align.Right
+                  VerticalAlign: =VerticalAlign.Middle
+
+            - galCards:
+                Control: Gallery
+                Variant: galleryVertical
+                Properties:
+                  X: =8
+                  Y: =60
+                  Width: =Parent.TemplateWidth - 32
+                  Height: =Parent.Height - 80
+                  TemplateSize: =132
+                  TemplatePadding: =8
+                  ShowScrollbar: =true
+                  Items: |
+                    =SortByColumns(
+                        Filter(colTasksF, StatusKey = ThisItem.Key),
+                        "DueDate", SortOrder.Ascending
+                     )
+                Children:
+                  - recCard:
+                      Control: Rectangle
+                      Properties:
+                        X: =0
+                        Y: =0
+                        Width: =Parent.TemplateWidth
+                        Height: =124
+                        Fill: =clrBg
+                        BorderColor: |
+                          =If(ThisItem.StatusKey <> "Done" && ThisItem.DueDate < gblToday,
+                              clrOverdue, clrBorder)
+                        BorderThickness: =2
+
+                  - lblCardTitle:
+                      Control: Label
+                      Properties:
+                        X: =12
+                        Y: =8
+                        Width: =Parent.TemplateWidth - 24
+                        Height: =48
+                        Text: =ThisItem.Title
+                        Font: =fntMain
+                        Size: =szBody
+                        FontWeight: =FontWeight.Semibold
+                        Color: =clrTextMain
+
+                  - lblCardMeta:
+                      Control: Label
+                      Properties:
+                        X: =12
+                        Y: =54
+                        Width: =Parent.TemplateWidth - 24
+                        Height: =24
+                        Text: =ThisItem.ProjectTitle
+                        Font: =fntMain
+                        Size: =szBody
+                        Color: =clrTextMuted
+
+                  - lblCardDue:
+                      Control: Label
+                      Properties:
+                        X: =12
+                        Y: =78
+                        Width: =Parent.TemplateWidth - 120
+                        Height: =24
+                        Text: ="กำหนด " & Text(ThisItem.DueDate, "d mmm yyyy", "en-US")
+                        Font: =fntMain
+                        Size: =szBody
+                        Color: |
+                          =If(ThisItem.StatusKey <> "Done" && ThisItem.DueDate < gblToday,
+                              clrOverdue, clrTextMuted)
+
+                  - btnPrevStatus:
+                      Control: Classic/Button
+                      Properties:
+                        X: =Parent.TemplateWidth - 104
+                        Y: =74
+                        Width: =uTap
+                        Height: =uTap
+                        Text: ="<"
+                        Font: =fntMain
+                        Size: =szH3
+                        Color: =clrTextMain
+                        Fill: =clrWhite
+                        BorderColor: =clrBorder
+                        BorderThickness: =2
+                        DisplayMode: |
+                          =If(Lower(ThisItem.OwnerEmail) = gblUserEmail
+                              && LookUp(tblStatus, Key = ThisItem.StatusKey, Seq) > 1,
+                              DisplayMode.Edit, DisplayMode.Disabled)
+                        AccessibleLabel: ="ย้ายงาน " & ThisItem.Title & " ไปสถานะก่อนหน้า"
+                        OnSelect: |
+                          =Set(gblNewStatus,
+                              LookUp(tblStatus,
+                                  Seq = LookUp(tblStatus, Key = ThisItem.StatusKey, Seq) - 1, Key));
+                           Patch(Tasks, LookUp(Tasks, ID = ThisItem.ID), { StatusKey: gblNewStatus });
+                           If(IsEmpty(Errors(Tasks)),
+                               UpdateIf(colTasksF, ID = ThisItem.ID, { StatusKey: gblNewStatus });
+                               Set(gblToast, "เปลี่ยนสถานะเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                               Set(gblToast, "เปลี่ยนสถานะไม่สำเร็จ คุณไม่ใช่ผู้สร้างรายการนี้");
+                               Set(gblToastIsError, true)
+                           )
+
+                  - btnNextStatus:
+                      Control: Classic/Button
+                      Properties:
+                        X: =Parent.TemplateWidth - 52
+                        Y: =74
+                        Width: =uTap
+                        Height: =uTap
+                        Text: =">"
+                        Font: =fntMain
+                        Size: =szH3
+                        Color: =clrWhite
+                        Fill: =clrPrimary
+                        HoverFill: =clrPrimaryDk
+                        BorderThickness: =0
+                        DisplayMode: |
+                          =If(Lower(ThisItem.OwnerEmail) = gblUserEmail
+                              && LookUp(tblStatus, Key = ThisItem.StatusKey, Seq) < 4,
+                              DisplayMode.Edit, DisplayMode.Disabled)
+                        AccessibleLabel: ="ย้ายงาน " & ThisItem.Title & " ไปสถานะถัดไป"
+                        OnSelect: |
+                          =Set(gblNewStatus,
+                              LookUp(tblStatus,
+                                  Seq = LookUp(tblStatus, Key = ThisItem.StatusKey, Seq) + 1, Key));
+                           Patch(Tasks, LookUp(Tasks, ID = ThisItem.ID), { StatusKey: gblNewStatus });
+                           If(IsEmpty(Errors(Tasks)),
+                               UpdateIf(colTasksF, ID = ThisItem.ID, { StatusKey: gblNewStatus });
+                               Set(gblToast, "เปลี่ยนสถานะเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                               Set(gblToast, "เปลี่ยนสถานะไม่สำเร็จ คุณไม่ใช่ผู้สร้างรายการนี้");
+                               Set(gblToastIsError, true)
+                           )
+
+      - lblToast:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblToast)
+            X: =uSidebarW + 24
+            Y: =768 - 76
+            Width: =560
+            Height: =52
+            Text: =gblToast
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =If(gblToastIsError, clrStBlocked, clrStDone)
+            PaddingLeft: =uPad
+            VerticalAlign: =VerticalAlign.Middle
+            OnSelect: =Set(gblToast, "")

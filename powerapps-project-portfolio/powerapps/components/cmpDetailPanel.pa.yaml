@@ -1,0 +1,312 @@
+# =====================================================================
+# cmpDetailPanel — แผงรายละเอียดด้านขวา เปิดเมื่อคลิกแถบหรือแถวใด ๆ
+# ---------------------------------------------------------------------
+# ต้องเปิด Access app scope = On
+#
+# Custom properties
+#   ชื่อ       | Property type | Data type | ค่าเริ่มต้น
+#   -----------|---------------|-----------|------------
+#   OnEdit     | Behavior      | -         | (ว่าง)   หน้าจอรับไปสั่ง Navigate(scrProject)
+#   OnDelete   | Behavior      | -         | (ว่าง)   หน้าจอรับไปเปิดกล่องยืนยัน
+#
+# ขนาด: Width 440, Height 768  วางชิดขอบขวา
+#
+# ตัวแปรที่ใช้ (หน้าจอเป็นคนตั้งตอนคลิกรายการ)
+#   gblDetailOpen  : boolean
+#   gblDetailRow   : แถวจาก colTimelineVisible
+#   gblDetailFull  : ระเบียนเต็มจาก SharePoint (ดึงด้วย ID ตอนเปิด — delegate ได้)
+#   gblCanEdit     : boolean  (Lower(OwnerEmail) = gblUserEmail)
+# =====================================================================
+ComponentDefinitions:
+  cmpDetailPanel:
+    DefinitionType: CanvasComponent
+    Properties:
+      Height: =768
+      Width: =440
+      Fill: =clrSurface
+    CustomProperties:
+      OnEdit:
+        PropertyKind: Event
+        ReturnType: None
+      OnDelete:
+        PropertyKind: Event
+        ReturnType: None
+    Children:
+      - recLeftEdge:
+          Control: Rectangle
+          Properties:
+            X: =0
+            Y: =0
+            Width: =1
+            Height: =Parent.Height
+            Fill: =clrBorder
+
+      - lblKind:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =uPad
+            Width: =Parent.Width - 100
+            Height: =28
+            Text: |
+              =Switch(gblDetailRow.ItemType,
+                  "Project", "โปรเจกต์",
+                  "Phase",   "เฟส",
+                  "Task",    "งาน",
+                  "BAU",     "อบรม BAU",
+                  "")
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            FontWeight: =FontWeight.Semibold
+
+      - btnClose:
+          Control: Classic/Button
+          Properties:
+            X: =Parent.Width - 60
+            Y: =uPad
+            Width: =uTap
+            Height: =uTap
+            Text: ="X"
+            Font: =fntMain
+            Size: =szH3
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="ปิดแผงรายละเอียด"
+            OnSelect: =Set(gblDetailOpen, false)
+
+      - lblDetailTitle:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =48
+            Width: =Parent.Width - 48
+            Height: =70
+            Text: =gblDetailRow.Title
+            Font: =fntMain
+            Size: =szH2
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - lblDates:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =122
+            Width: =Parent.Width - 48
+            Height: =28
+            Text: |
+              =Text(gblDetailRow.BarStart, "d mmm yyyy", "en-US") & "  –  " &
+               Text(gblDetailRow.BarEnd, "d mmm yyyy", "en-US")
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+
+      - lblStatusChip:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =158
+            Width: =180
+            Height: =32
+            Visible: =gblDetailRow.ItemType <> "BAU"
+            Text: =Coalesce(LookUp(tblStatus, Key = gblDetailRow.StatusKey, Label), "ไม่ระบุ")
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =Coalesce(LookUp(tblStatus, Key = gblDetailRow.StatusKey, Color), clrStNotStarted)
+            Align: =Align.Center
+            VerticalAlign: =VerticalAlign.Middle
+
+      - lblOverdue:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5 + 192
+            Y: =158
+            Width: =180
+            Height: =32
+            Visible: =gblDetailRow.IsOverdue
+            Text: ="เลยกำหนดแล้ว"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrOverdue
+            Align: =Align.Center
+            VerticalAlign: =VerticalAlign.Middle
+
+      # ---------- รายละเอียดของโปรเจกต์ / เฟส / งาน ----------
+      - galFieldsPpt:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uPad * 1.5
+            Y: =204
+            Width: =Parent.Width - 48
+            Height: =380
+            TemplateSize: =62
+            ShowScrollbar: =true
+            Visible: =gblDetailRow.ItemType <> "BAU"
+            Items: |
+              =Filter(
+                  Table(
+                      { Lbl: "โปรเจกต์",        Val: Text(gblDetailRow.Title) },
+                      { Lbl: "เจ้าของโปรเจกต์", Val: Text(gblDetailFull.OwnerEmail) },
+                      { Lbl: "ผู้รับผิดชอบ",    Val: Coalesce(Text(gblDetailRow.PersonText), "ยังไม่ระบุ") },
+                      { Lbl: "แผนก",            Val: Text(gblDetailFull.Department) },
+                      { Lbl: "ความสำคัญ",       Val: Coalesce(LookUp(tblPriority, Key = Text(gblDetailFull.PriorityKey), Label), "-") },
+                      { Lbl: "รายละเอียด",      Val: Coalesce(Text(gblDetailFull.Description), "-") }
+                  ),
+                  !IsBlank(Val) && Val <> ""
+               )
+          Children:
+            - lblFieldName:
+                Control: Label
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =24
+                  Text: =ThisItem.Lbl
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+            - lblFieldVal:
+                Control: Label
+                Properties:
+                  X: =0
+                  Y: =24
+                  Width: =Parent.TemplateWidth
+                  Height: =34
+                  Text: =ThisItem.Val
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+
+      # ---------- รายละเอียดของ BAU (ดึงระเบียนเต็มด้วย ID ตอนเปิดแผง) ----------
+      - galFieldsBau:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uPad * 1.5
+            Y: =204
+            Width: =Parent.Width - 48
+            Height: =490
+            TemplateSize: =62
+            ShowScrollbar: =true
+            Visible: =gblDetailRow.ItemType = "BAU"
+            Items: |
+              =Filter(
+                  Table(
+                      { Lbl: "กลุ่มหลักสูตร",   Val: Text(gblDetailRow.SubTitle) },
+                      { Lbl: "สถานะ",           Val: Text(gblDetailRow.AreaText) },
+                      { Lbl: "ผู้รับผิดชอบ",    Val: Text(gblDetailRow.PersonText) },
+                      { Lbl: "รหัสหลักสูตร",    Val: Text(gblDetailFull.CourseID) },
+                      { Lbl: "รอบ",             Val: Text(gblDetailFull.Session) },
+                      { Lbl: "รอบ (ร่าง)",      Val: Text(gblDetailFull.DraftSession) },
+                      { Lbl: "ห้อง",            Val: Text(gblDetailFull.Room) },
+                      { Lbl: "วิทยากร",         Val: Text(gblDetailFull.Instructor) },
+                      { Lbl: "DSD",             Val: Text(gblDetailFull.DSD) },
+                      { Lbl: "จำนวนที่นั่ง",    Val: Text(gblDetailFull.SeatNum) },
+                      { Lbl: "ระยะเวลา",        Val: Text(gblDetailFull.Duration) },
+                      { Lbl: "หมายเหตุ",        Val: Text(gblDetailFull.Note) }
+                  ),
+                  !IsBlank(Val) && Val <> ""
+               )
+          Children:
+            - lblBauName:
+                Control: Label
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =24
+                  Text: =ThisItem.Lbl
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+            - lblBauVal:
+                Control: Label
+                Properties:
+                  X: =0
+                  Y: =24
+                  Width: =Parent.TemplateWidth
+                  Height: =34
+                  Text: =ThisItem.Val
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+
+      - lblBauReadOnly:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =Parent.Height - 120
+            Width: =Parent.Width - 48
+            Height: =48
+            Visible: =gblDetailRow.ItemType = "BAU"
+            Text: ="ข้อมูลอบรม BAU มาจากระบบ L&D TMP แอปนี้อ่านอย่างเดียว แก้ไขที่นี่ไม่ได้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWarnText
+            Fill: =clrWarnBg
+
+      # ---------- ปุ่มแก้ไข / ลบ (เฉพาะเจ้าของโปรเจกต์) ----------
+      - btnEdit:
+          Control: Classic/Button
+          Properties:
+            X: =uPad * 1.5
+            Y: =Parent.Height - 64
+            Width: =190
+            Height: =uTap
+            Visible: =gblDetailRow.ItemType <> "BAU"
+            DisplayMode: =If(gblCanEdit, DisplayMode.Edit, DisplayMode.Disabled)
+            Text: ="แก้ไข"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            DisabledFill: =clrBorder
+            DisabledColor: =clrTextMuted
+            BorderThickness: =0
+            AccessibleLabel: ="แก้ไขรายการนี้"
+            OnSelect: =cmpDetailPanel.OnEdit()
+
+      - btnDelete:
+          Control: Classic/Button
+          Properties:
+            X: =uPad * 1.5 + 202
+            Y: =Parent.Height - 64
+            Width: =190
+            Height: =uTap
+            Visible: =gblDetailRow.ItemType <> "BAU"
+            DisplayMode: =If(gblCanEdit, DisplayMode.Edit, DisplayMode.Disabled)
+            Text: ="ลบ"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrStBlocked
+            Fill: =clrWhite
+            BorderColor: =clrStBlocked
+            BorderThickness: =2
+            HoverFill: =ColorValue("#FBEAE9")
+            DisabledColor: =clrTextMuted
+            DisabledBorderColor: =clrBorder
+            AccessibleLabel: ="ลบรายการนี้"
+            OnSelect: =cmpDetailPanel.OnDelete()
+
+      - lblNoPermission:
+          Control: Label
+          Properties:
+            X: =uPad * 1.5
+            Y: =Parent.Height - 104
+            Width: =Parent.Width - 48
+            Height: =36
+            Visible: =gblDetailRow.ItemType <> "BAU" && !gblCanEdit
+            Text: ="คุณดูได้อย่างเดียว เฉพาะผู้สร้างโปรเจกต์เท่านั้นที่แก้ไขได้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted

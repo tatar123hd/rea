@@ -1,0 +1,108 @@
+// =====================================================================
+// App.Formulas  —  วางในคุณสมบัติ Formulas ของ App (ไม่ใช่ OnStart)
+// ---------------------------------------------------------------------
+// วิธีวาง: Tree view -> App -> ช่องเลือกคุณสมบัติด้านซ้ายบน -> Formulas
+//          แล้ววางข้อความทั้งหมดนี้ (ทุกบรรทัดจบด้วย ; เสมอ)
+//
+// ไฟล์นี้มีแต่ "ค่าคงที่" ล้วน ๆ ไม่อ้างอิงตัวแปร global เลย
+// เพราะ named formula ที่อ้างตัวแปรทำให้เกิดการคำนวณซ้ำยากคาดเดา
+// ค่าที่เปลี่ยนตามผู้ใช้/ตัวกรองทั้งหมดอยู่ในตัวแปร global (ดู App.OnStart)
+// =====================================================================
+
+// ---------- สีตามแบรนด์ ----------
+clrPrimary   = ColorValue("#0064FF");
+clrNavy      = ColorValue("#002850");
+clrWhite     = ColorValue("#FFFFFF");
+clrBlack     = ColorValue("#000000");
+
+// ---------- สีที่สร้างต่อจากแบรนด์ (จำเป็นต่อการอ่านง่าย ไม่ได้อยู่ในชุดแบรนด์เดิม) ----------
+clrBg        = ColorValue("#F4F6FA");   // พื้นหลังหน้าจอ
+clrSurface   = ColorValue("#FFFFFF");   // พื้นการ์ด
+clrBorder    = ColorValue("#D2D9E4");   // เส้นขอบ
+clrTextMain  = ColorValue("#121926");   // ตัวอักษรหลัก  (คอนทราสต์บนพื้นขาว 16.8:1)
+clrTextMuted = ColorValue("#44506B");   // ตัวอักษรรอง  (คอนทราสต์บนพื้นขาว 8.6:1)
+clrHover     = ColorValue("#E8F0FF");
+clrPrimaryDk = ColorValue("#0048B5");   // สถานะกด/โฮเวอร์ของปุ่มหลัก
+
+// ---------- สีสถานะ (ตัวอักษรสีขาวทุกตัว ผ่าน WCAG AA ที่ขนาด 16px) ----------
+clrStNotStarted = ColorValue("#5B6577");  // 6.0:1 กับสีขาว
+clrStInProgress = ColorValue("#0064FF");  // 4.6:1 กับสีขาว
+clrStDone       = ColorValue("#0F7B3F");  // 5.1:1 กับสีขาว
+clrStBlocked    = ColorValue("#B3261E");  // 6.0:1 กับสีขาว
+clrOverdue      = ColorValue("#B3261E");
+clrWarnBg       = ColorValue("#FFF4E0");
+clrWarnText     = ColorValue("#6B4600");  // 7.4:1 กับ clrWarnBg
+
+// ---------- ตัวอักษร ----------
+fntMain   = Font.'Segoe UI';
+szBody    = 16;   // ข้อความทั่วไป (ข้อกำหนด: ไม่ต่ำกว่า 16)
+szLabel   = 16;
+szH3      = 20;   // หัวข้อย่อย (ข้อกำหนด: ไม่ต่ำกว่า 20)
+szH2      = 24;
+szH1      = 28;
+szTick    = 16;   // ป้ายบอกวันบนไม้บรรทัดไทม์ไลน์ ตั้งใจไม่ลดต่ำกว่า 16
+
+// ---------- ขนาดมาตรฐาน ----------
+uTap        = 44;   // ขนาดเป้าคลิกขั้นต่ำ (ข้อกำหนด: ไม่ต่ำกว่า 44)
+uRow        = 44;   // ความสูงหนึ่งแถวในไทม์ไลน์
+uSidebarW   = 240;
+uHeaderH    = 72;
+uFilterH    = 176;   // แถบตัวกรอง 3 บรรทัด
+uLaneW      = 300;  // ความกว้างคอลัมน์ชื่อรายการด้านซ้ายของไทม์ไลน์
+uPad        = 16;
+uRadius     = 8;
+
+// ---------- ตารางค่าคงที่: สถานะ ----------
+tblStatus = Table(
+    { Key: "NotStarted",  Label: "ยังไม่เริ่ม",        Color: ColorValue("#5B6577"), Seq: 1 },
+    { Key: "InProgress",  Label: "กำลังดำเนินการ",    Color: ColorValue("#0064FF"), Seq: 2 },
+    { Key: "Done",        Label: "เสร็จแล้ว",          Color: ColorValue("#0F7B3F"), Seq: 3 },
+    { Key: "Blocked",     Label: "ติดปัญหา",           Color: ColorValue("#B3261E"), Seq: 4 }
+);
+
+// ---------- ตารางค่าคงที่: ความสำคัญ ----------
+tblPriority = Table(
+    { Key: "High",   Label: "สูง",       Seq: 1 },
+    { Key: "Medium", Label: "ปานกลาง",  Seq: 2 },
+    { Key: "Low",    Label: "ต่ำ",       Seq: 3 }
+);
+
+// ---------- ตารางค่าคงที่: ประเภทรายการ ----------
+tblItemType = Table(
+    { Key: "Project", Label: "โปรเจกต์" },
+    { Key: "Phase",   Label: "เฟส" },
+    { Key: "Task",    Label: "งาน" },
+    { Key: "BAU",     Label: "อบรม BAU" }
+);
+
+// ---------- ตารางค่าคงที่: ประเภทเฟส ----------
+tblPhaseType = Table(
+    { Key: "Plan",     Label: "วางแผน",      Seq: 1 },
+    { Key: "Design",   Label: "ออกแบบ",      Seq: 2 },
+    { Key: "Develop",  Label: "พัฒนา",       Seq: 3 },
+    { Key: "Test",     Label: "ทดสอบ",       Seq: 4 },
+    { Key: "Launch",   Label: "เริ่มใช้งาน", Seq: 5 },
+    { Key: "Evaluate", Label: "ประเมินผล",   Seq: 6 }
+);
+
+// ---------- ตารางค่าคงที่: ระดับการซูมไทม์ไลน์ ----------
+tblZoom = Table(
+    { Key: "Week",    Label: "รายสัปดาห์",  TickDays: 1 },
+    { Key: "Month",   Label: "รายเดือน",    TickDays: 7 },
+    { Key: "Quarter", Label: "รายไตรมาส",   TickDays: 14 }
+);
+
+// ---------- จานสีสำหรับ CourseArea ของ BAU (วนใช้ซ้ำตามลำดับตัวอักษร) ----------
+tblAreaPalette = Table(
+    { Seq: 0, Color: ColorValue("#0064FF") },
+    { Seq: 1, Color: ColorValue("#7A3DD1") },
+    { Seq: 2, Color: ColorValue("#0F7B3F") },
+    { Seq: 3, Color: ColorValue("#B35C00") },
+    { Seq: 4, Color: ColorValue("#00737D") },
+    { Seq: 5, Color: ColorValue("#B3246E") },
+    { Seq: 6, Color: ColorValue("#4A5568") },
+    { Seq: 7, Color: ColorValue("#8A6D00") }
+);
+
+// ---------- ค่าพิเศษ ----------
+txtAllDept = "__ALL__";   // ค่าที่แปลว่า "ทุกแผนก" ในตัวกรอง

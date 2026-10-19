@@ -1,0 +1,264 @@
+# =====================================================================
+# scrMyTasks — งานของฉัน
+# ---------------------------------------------------------------------
+# แบ่ง 3 กลุ่ม: เลยกำหนด / สัปดาห์นี้ / หลังจากนี้
+#
+# งานโปรเจกต์ : Filter(Tasks, AssignedToEmail = gblUserEmail)  -> delegate ได้ (text ที่ index แล้ว)
+# อบรม BAU    : ถ้า Responder/LM เป็นคอลัมน์ Person การเทียบ .Email จะ delegate ไม่ได้
+#               จึงดึงด้วยช่วงวันที่ (90 วันข้างหน้า + 30 วันย้อนหลัง) แล้วกรองในหน่วยความจำ
+#               ถ้าเป็นคอลัมน์ Text ให้ใช้สูตรที่คอมเมนต์ไว้ ซึ่ง delegate ได้เต็มรูปแบบ
+# =====================================================================
+Screens:
+  scrMyTasks:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "MyTasks");
+         Set(gblWeekStart, DateAdd(Today(), -(Weekday(Today(), StartOfWeek.Monday) - 1), TimeUnit.Days));
+         Set(gblWeekEnd, DateAdd(gblWeekStart, 6, TimeUnit.Days));
+         ClearCollect(colMyTasks,
+             Filter(Tasks, AssignedToEmail = gblUserEmail, StatusKey <> "Done")
+         );
+         // --- BAU: ชุด PERSON (กรองในหน่วยความจำ) ---
+         ClearCollect(colMyBauRaw,
+             Filter(BAU_TMP,
+                 EndDate   >= DateAdd(Today(), -30, TimeUnit.Days),
+                 StartDate <= DateAdd(Today(),  90, TimeUnit.Days)
+             )
+         );
+         ClearCollect(colMyBau,
+             Filter(
+                 ForAll(colMyBauRaw As b,
+                     {
+                         ID: b.ID,
+                         Title: b.Title,
+                         StartDate: b.StartDate,
+                         EndDate: b.EndDate,
+                         CourseArea: Coalesce(Text(b.CourseArea), ""),
+                         BauStatus: Coalesce(Text(b.Status.Value), ""),
+                         RoleText:
+                             If(Lower(Coalesce(b.Responder.Email, "")) = gblUserEmail, "ผู้รับผิดชอบ",
+                                If(Lower(Coalesce(b.LM.Email, "")) = gblUserEmail, "LM", ""))
+                     }
+                 ),
+                 RoleText <> "",
+                 BauStatus <> "ยกเลิก"
+             )
+         )
+         // --- BAU: ชุด TEXT (delegate ได้ ใช้แทนสองคำสั่งข้างบน) ---
+         // ClearCollect(colMyBauRaw,
+         //     Filter(BAU_TMP, Responder = gblUserEmail)
+         // );
+         // Collect(colMyBauRaw,
+         //     Filter(BAU_TMP, LM = gblUserEmail)
+         // );
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="MyTasks"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="งานของฉัน"
+            SubtitleText: |
+              =gblUserName & "  ·  งานโปรเจกต์ " & Text(CountRows(colMyTasks)) &
+               " รายการ  ·  อบรม BAU " & Text(CountRows(colMyBau)) & " รายการ"
+            OnRefresh: =Select(btnReloadMine)
+
+      - btnReloadMine:
+          Control: Classic/Button
+          Properties:
+            X: =-200
+            Y: =-200
+            Width: =1
+            Height: =1
+            Visible: =false
+            Text: =""
+            OnSelect: =Navigate(scrMyTasks)
+
+      - galGroups:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =768 - uHeaderH - (uPad * 2)
+            TemplateSize: =(1366 - uSidebarW - (uPad * 2)) / 3
+            TemplatePadding: =8
+            ShowScrollbar: =false
+            Items: |
+              =Table(
+                  { Key: "Late",  Lbl: "เลยกำหนด",   Clr: clrOverdue },
+                  { Key: "Week",  Lbl: "สัปดาห์นี้",  Clr: clrPrimary },
+                  { Key: "Later", Lbl: "หลังจากนี้",  Clr: clrStNotStarted }
+              )
+          Children:
+            - recGrp:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 16
+                  Height: =Parent.Height - 16
+                  Fill: =clrSurface
+
+            - recGrpHead:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 16
+                  Height: =52
+                  Fill: =ThisItem.Clr
+
+            - lblGrpTitle:
+                Control: Label
+                Properties:
+                  X: =16
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 32
+                  Height: =52
+                  Text: =ThisItem.Lbl
+                  Font: =fntMain
+                  Size: =szH3
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrWhite
+                  VerticalAlign: =VerticalAlign.Middle
+
+            - galMine:
+                Control: Gallery
+                Variant: galleryVertical
+                Properties:
+                  X: =8
+                  Y: =60
+                  Width: =Parent.TemplateWidth - 32
+                  Height: =Parent.Height - 80
+                  TemplateSize: =96
+                  TemplatePadding: =8
+                  ShowScrollbar: =true
+                  Items: |
+                    =With({ grp: ThisItem.Key },
+                     Ungroup(
+                        Table(
+                            { T: ForAll(
+                                   Filter(colMyTasks,
+                                       Switch(grp,
+                                           "Late",  DueDate < Today(),
+                                           "Week",  DueDate >= gblWeekStart && DueDate <= gblWeekEnd,
+                                           DueDate > gblWeekEnd
+                                       )
+                                   ) As t,
+                                   {
+                                       Lbl:  t.Title,
+                                       Sub:  t.ProjectTitle,
+                                       Day:  t.DueDate,
+                                       Clr:  Coalesce(LookUp(tblStatus, Key = t.StatusKey, Color), clrStNotStarted),
+                                       Kind: "งาน"
+                                   }) },
+                            { T: ForAll(
+                                   Filter(colMyBau,
+                                       Switch(grp,
+                                           "Late",  EndDate < Today(),
+                                           "Week",  StartDate >= gblWeekStart && StartDate <= gblWeekEnd,
+                                           StartDate > gblWeekEnd
+                                       )
+                                   ) As b,
+                                   {
+                                       Lbl:  b.Title,
+                                       Sub:  b.CourseArea & " · " & b.RoleText,
+                                       Day:  b.StartDate,
+                                       Clr:  clrNavy,
+                                       Kind: "อบรม BAU"
+                                   }) }
+                        ),
+                        "T"
+                     ))
+                Children:
+                  - recMine:
+                      Control: Rectangle
+                      Properties:
+                        X: =0
+                        Y: =0
+                        Width: =Parent.TemplateWidth
+                        Height: =88
+                        Fill: =clrBg
+                        BorderColor: =clrBorder
+                        BorderThickness: =1
+                  - recMineTag:
+                      Control: Rectangle
+                      Properties:
+                        X: =0
+                        Y: =0
+                        Width: =6
+                        Height: =88
+                        Fill: =ThisItem.Clr
+                  - lblMineKind:
+                      Control: Label
+                      Properties:
+                        X: =14
+                        Y: =4
+                        Width: =Parent.TemplateWidth - 28
+                        Height: =24
+                        Text: =ThisItem.Kind
+                        Font: =fntMain
+                        Size: =szBody
+                        Color: =clrTextMuted
+                  - lblMineTitle:
+                      Control: Label
+                      Properties:
+                        X: =14
+                        Y: =28
+                        Width: =Parent.TemplateWidth - 28
+                        Height: =30
+                        Text: =ThisItem.Lbl
+                        Font: =fntMain
+                        Size: =szBody
+                        FontWeight: =FontWeight.Semibold
+                        Color: =clrTextMain
+                  - lblMineSub:
+                      Control: Label
+                      Properties:
+                        X: =14
+                        Y: =56
+                        Width: =Parent.TemplateWidth - 28
+                        Height: =26
+                        Text: |
+                          =Text(ThisItem.Day, "d mmm yyyy", "en-US") & "  ·  " & ThisItem.Sub
+                        Font: =fntMain
+                        Size: =szBody
+                        Color: =clrTextMuted
+
+            - lblGrpEmpty:
+                Control: Label
+                Properties:
+                  Visible: =IsEmpty(galMine.AllItems)
+                  X: =16
+                  Y: =120
+                  Width: =Parent.TemplateWidth - 48
+                  Height: =60
+                  Text: ="ไม่มีรายการในกลุ่มนี้"
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+                  Align: =Align.Center

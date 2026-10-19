@@ -1,0 +1,71 @@
+// =====================================================================
+// App.OnStart  —  วางในคุณสมบัติ OnStart ของ App
+// ---------------------------------------------------------------------
+// หน้าที่: อ่านโปรไฟล์ผู้ใช้ ตั้งค่าตัวกรองเริ่มต้น แล้วโหลดข้อมูลรอบแรก
+// บรรทัดสุดท้ายคือการเรียกชุดคำสั่งโหลดข้อมูลจาก shared/LoadData.pafx.txt
+// (ต้องคัดลอกเนื้อหาไฟล์นั้นมาวางต่อท้ายตรงจุดที่ระบุไว้)
+// =====================================================================
+
+// ---------- 1) ตัวตนผู้ใช้ ----------
+Set(gblUserEmail, Lower(User().Email));
+Set(gblUserName,  User().FullName);
+
+// โปรไฟล์ Microsoft 365 ของผู้ใช้ปัจจุบัน  ถ้าเรียกไม่ได้ให้ถือว่าไม่มีข้อมูลแผนก
+Set(gblUserDept,
+    IfError(
+        Coalesce(Text(Office365Users.MyProfileV2().department), ""),
+        ""
+    )
+);
+Set(gblDeptMissing, IsBlank(gblUserDept) || gblUserDept = "");
+
+// ---------- 2) สิทธิ์ผู้ดูแล  (delegable: Email เป็น text ที่ index แล้ว) ----------
+Set(gblIsAdmin,
+    IfError(
+        !IsBlank(LookUp(AppAdmins, Email = gblUserEmail)),
+        false
+    )
+);
+
+// ---------- 3) cache โปรไฟล์ (อีเมล -> แผนก) ใช้ร่วมกันทั้งแอป ----------
+ClearCollect(colProfiles, { Email: gblUserEmail, Department: gblUserDept });
+
+// ---------- 4) ค่าเริ่มต้นของตัวกรองทั่วโลก ----------
+// ถ้าผู้ใช้ไม่มีแผนกในโปรไฟล์ ให้เริ่มที่ "ทุกแผนก" แทนการแสดงหน้าว่าง
+Set(gblDeptFilter,    If(gblDeptMissing, txtAllDept, gblUserDept));
+Set(gblPersonFilter,  "");          // อีเมลผู้รับผิดชอบ  "" = ไม่กรอง
+Set(gblOwnerFilter,   "");          // อีเมลเจ้าของโปรเจกต์
+Set(gblStatusFilter,  "");          // StatusKey  "" = ทุกสถานะ
+Set(gblShowProject,   true);
+Set(gblShowPhase,     true);
+Set(gblShowTask,      true);
+Set(gblShowBau,       true);
+Set(gblCourseArea,    "");
+Set(gblLearningType,  "");
+Set(gblBauStatus,     "");
+Set(gblShowCancelled, false);       // ซ่อน "ยกเลิก" เป็นค่าเริ่มต้นตามข้อกำหนด
+
+// ---------- 5) หน้าต่างเวลาเริ่มต้น: เดือนปัจจุบัน ----------
+Set(gblZoom,   "Month");
+Set(gblAnchor, Today());
+
+// ---------- 6) สถานะหน้าจอ ----------
+Set(gblView,          "Timeline");
+Set(gblTruncated,     false);
+Set(gblBauReadable,   true);
+Set(gblDetailOpen,    false);
+Set(gblDetailItem,    Blank());
+Set(gblConfirmOpen,   false);
+Set(gblConfirmTitle,  "");
+Set(gblConfirmBody,   "");
+Set(gblConfirmAction, "");
+Set(gblBusy,          false);
+Set(gblToast,         "");
+Set(gblToastIsError,  false);
+Clear(colCollapsed);
+Clear(colSelProjects);
+
+// =====================================================================
+// ---------- 7) โหลดข้อมูลรอบแรก ----------
+// วางเนื้อหาทั้งหมดของ shared/LoadData.pafx.txt ต่อจากบรรทัดนี้
+// =====================================================================

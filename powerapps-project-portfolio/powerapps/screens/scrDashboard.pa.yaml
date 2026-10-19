@@ -1,0 +1,391 @@
+# =====================================================================
+# scrDashboard — ภาพรวม
+# ---------------------------------------------------------------------
+# ตัวเลขทุกตัวนับจาก collection ที่โหลดมาแล้ว (colTasksF / colBauF)
+# จึงไม่มี CountRows หรือ CountIf ยิงตรงไปที่ SharePoint = ปลอดภัยเรื่อง delegation
+# ข้อจำกัดที่ต้องบอกผู้ใช้: ตัวเลขทั้งหมดคือ "เฉพาะในช่วงวันที่ที่เลือก" ไม่ใช่ยอดรวมทั้งระบบ
+# =====================================================================
+Screens:
+  scrDashboard:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Dashboard");
+         Set(gblWeekStart, DateAdd(Today(), -(Weekday(Today(), StartOfWeek.Monday) - 1), TimeUnit.Days));
+         Set(gblWeekEnd, DateAdd(gblWeekStart, 6, TimeUnit.Days))
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Dashboard"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="ภาพรวม"
+            SubtitleText: |
+              ="ตัวเลขทั้งหมดนับเฉพาะช่วง " & Text(gblWinStartD, "d mmm yyyy", "en-US") &
+               " ถึง " & Text(gblWinEndD, "d mmm yyyy", "en-US")
+            OnRefresh: =Select(cmpFilters_1)
+
+      - cmpFilters_1:
+          Control: Component
+          ComponentName: cmpFilters
+          Properties:
+            X: =uSidebarW
+            Y: =uHeaderH
+
+      # ---------- การ์ดตัวเลขหลัก 4 ใบ ----------
+      - galKpi:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uFilterH + uPad
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =120
+            TemplateSize: =(1366 - uSidebarW - (uPad * 2)) / 4
+            TemplatePadding: =8
+            ShowScrollbar: =false
+            Items: |
+              =Table(
+                  { Lbl: "งานในช่วงนี้",  Val: CountRows(colTasksF),                                        Clr: clrPrimary },
+                  { Lbl: "เลยกำหนด",      Val: CountRows(Filter(colTasksF, StatusKey <> "Done", DueDate < gblToday)), Clr: clrOverdue },
+                  { Lbl: "เสร็จแล้ว",     Val: CountRows(Filter(colTasksF, StatusKey = "Done")),             Clr: clrStDone },
+                  { Lbl: "ติดปัญหา",      Val: CountRows(Filter(colTasksF, StatusKey = "Blocked")),          Clr: clrStBlocked }
+              )
+          Children:
+            - recKpi:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth - 16
+                  Height: =120
+                  Fill: =clrSurface
+            - recKpiBar:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =6
+                  Height: =120
+                  Fill: =ThisItem.Clr
+            - lblKpiVal:
+                Control: Label
+                Properties:
+                  X: =24
+                  Y: =16
+                  Width: =Parent.TemplateWidth - 48
+                  Height: =56
+                  Text: =Text(ThisItem.Val)
+                  Font: =fntMain
+                  Size: =40
+                  FontWeight: =FontWeight.Semibold
+                  Color: =ThisItem.Clr
+            - lblKpiLbl:
+                Control: Label
+                Properties:
+                  X: =24
+                  Y: =72
+                  Width: =Parent.TemplateWidth - 48
+                  Height: =32
+                  Text: =ThisItem.Lbl
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMuted
+
+      # ---------- จำนวนงานแยกตามสถานะ ----------
+      - lblH1:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =galKpi.Y + 136
+            Width: =420
+            Height: =36
+            Text: ="จำนวนงานแยกตามสถานะ"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - galStatus:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =lblH1.Y + 40
+            Width: =420
+            Height: =220
+            TemplateSize: =52
+            ShowScrollbar: =false
+            Items: |
+              =AddColumns(
+                  SortByColumns(tblStatus, "Seq", SortOrder.Ascending),
+                  "Cnt", CountRows(Filter(colTasksF, StatusKey = Key))
+               )
+          Children:
+            - recStatusRow:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =420
+                  Height: =48
+                  Fill: =clrSurface
+            - lblStatusName:
+                Control: Label
+                Properties:
+                  X: =16
+                  Y: =0
+                  Width: =200
+                  Height: =48
+                  Text: =ThisItem.Label
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - recStatusBar:
+                Control: Rectangle
+                Properties:
+                  X: =220
+                  Y: =16
+                  Width: |
+                    =Max(4,
+                        ThisItem.Cnt / Max(CountRows(colTasksF), 1) * 140)
+                  Height: =16
+                  Fill: =ThisItem.Color
+            - lblStatusCnt:
+                Control: Label
+                Properties:
+                  X: =370
+                  Y: =0
+                  Width: =44
+                  Height: =48
+                  Text: =Text(ThisItem.Cnt)
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrTextMain
+                  Align: =Align.Right
+                  VerticalAlign: =VerticalAlign.Middle
+
+      # ---------- อบรม BAU ที่กำลังจะถึง ----------
+      - lblH2:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 460
+            Y: =galKpi.Y + 136
+            Width: =420
+            Height: =36
+            Text: ="อบรม BAU ที่กำลังจะถึง"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - galBauNext:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + 460
+            Y: =lblH2.Y + 40
+            Width: =420
+            Height: =300
+            TemplateSize: =72
+            ShowScrollbar: =true
+            Items: |
+              =SortByColumns(
+                  Filter(colBauF, StartDate >= gblToday),
+                  "StartDate", SortOrder.Ascending
+               )
+          Children:
+            - recBauRow:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =420
+                  Height: =68
+                  Fill: =clrSurface
+            - recBauTag:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =6
+                  Height: =68
+                  Fill: =Coalesce(LookUp(colAreaColors, CourseArea = ThisItem.CourseArea, Color), clrNavy)
+            - lblBauTitle:
+                Control: Label
+                Properties:
+                  X: =16
+                  Y: =6
+                  Width: =390
+                  Height: =30
+                  Text: =ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+            - lblBauWhen:
+                Control: Label
+                Properties:
+                  X: =16
+                  Y: =34
+                  Width: =390
+                  Height: =28
+                  Text: |
+                    =Text(ThisItem.StartDate, "d mmm yyyy", "en-US") & "  ·  " &
+                     ThisItem.CourseArea &
+                     If(ThisItem.BauStatus = "รอยืนยัน", "  ·  รอยืนยัน", "")
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =If(ThisItem.BauStatus = "รอยืนยัน", clrTextMuted, clrTextMain)
+
+      - lblNoBau:
+          Control: Label
+          Properties:
+            Visible: =!gblBauReadable
+            X: =uSidebarW + 460
+            Y: =lblH2.Y + 40
+            Width: =420
+            Height: =80
+            Text: ="ไม่สามารถอ่านข้อมูล BAU ได้ กรุณาขอสิทธิ์ Read จากผู้ดูแลลิสต์"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWarnText
+            Fill: =clrWarnBg
+
+      # ---------- ปริมาณงานรายคน สัปดาห์นี้ ----------
+      - lblH3:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 900
+            Y: =galKpi.Y + 136
+            Width: =430
+            Height: =36
+            Text: ="ปริมาณงานรายคน สัปดาห์นี้"
+            Font: =fntMain
+            Size: =szH3
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMain
+
+      - lblH3Sub:
+          Control: Label
+          Properties:
+            X: =uSidebarW + 900
+            Y: =lblH3.Y + 34
+            Width: =430
+            Height: =26
+            Text: |
+              =Text(gblWeekStart, "d mmm", "en-US") & " ถึง " & Text(gblWeekEnd, "d mmm yyyy", "en-US")
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+
+      - galWorkload:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + 900
+            Y: =lblH3.Y + 66
+            Width: =430
+            Height: =274
+            TemplateSize: =52
+            ShowScrollbar: =true
+            Items: |
+              =SortByColumns(
+                  AddColumns(
+                      GroupBy(
+                          Filter(colTasksF,
+                              !IsBlank(AssignedToEmail),
+                              DueDate >= gblWeekStart,
+                              DueDate <= gblWeekEnd
+                          ),
+                          "AssignedToEmail", "GrpRows"
+                      ),
+                      "Cnt", CountRows(GrpRows),
+                      "Late", CountRows(Filter(GrpRows, StatusKey <> "Done", DueDate < gblToday))
+                  ),
+                  "Cnt", SortOrder.Descending
+               )
+          Children:
+            - recWlRow:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =430
+                  Height: =48
+                  Fill: =clrSurface
+            - lblWlName:
+                Control: Label
+                Properties:
+                  X: =16
+                  Y: =0
+                  Width: =280
+                  Height: =48
+                  Text: =ThisItem.AssignedToEmail
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblWlCnt:
+                Control: Label
+                Properties:
+                  X: =300
+                  Y: =0
+                  Width: =60
+                  Height: =48
+                  Text: =Text(ThisItem.Cnt) & " งาน"
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =FontWeight.Semibold
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+            - lblWlLate:
+                Control: Label
+                Properties:
+                  Visible: =ThisItem.Late > 0
+                  X: =366
+                  Y: =8
+                  Width: =56
+                  Height: =32
+                  Text: ="ช้า " & Text(ThisItem.Late)
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =clrWhite
+                  Fill: =clrOverdue
+                  Align: =Align.Center
+                  VerticalAlign: =VerticalAlign.Middle
+
+      - lblCountNote:
+          Control: Label
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =768 - 44
+            Width: =1366 - uSidebarW - (uPad * 2)
+            Height: =32
+            Text: |
+              ="หมายเหตุ: ตัวเลขทั้งหมดบนหน้านี้นับเฉพาะรายการที่อยู่ในช่วงวันที่และตัวกรองที่เลือกไว้ ไม่ใช่ยอดรวมทั้งระบบ"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted

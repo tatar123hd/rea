@@ -1,0 +1,216 @@
+# =====================================================================
+# scrHelp — คู่มือการใช้งานในแอป (ภาษาไทย)
+# ---------------------------------------------------------------------
+# เนื้อหาเต็มอยู่ในไฟล์ 04-help-content-th.md  ไฟล์นี้ฝังเนื้อหาไว้ในตาราง colHelp
+# เพื่อให้ผู้ใช้อ่านได้ในแอปโดยไม่ต้องออกไปที่อื่น
+# ใช้คอนโทรล HTML text เพราะต้องมีหัวข้อ ตัวหนา และรายการข้อ
+# ขนาดตัวอักษรในสไตล์ตั้งไว้ 18px ตามข้อกำหนดเรื่องผู้ใช้ทุกช่วงวัย
+# =====================================================================
+Screens:
+  scrHelp:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Help");
+         If(IsBlank(gblHelpTopic), Set(gblHelpTopic, "start"))
+    Children:
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Help"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="คู่มือการใช้งาน"
+            SubtitleText: ="เลือกหัวข้อทางซ้าย เนื้อหาจะแสดงทางขวา"
+            OnRefresh: =Set(gblHelpTopic, "start")
+
+      - galHelpTopics:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW + uPad
+            Y: =uHeaderH + uPad
+            Width: =360
+            Height: =768 - uHeaderH - (uPad * 2)
+            TemplateSize: =uTap + 8
+            ShowScrollbar: =true
+            Items: |
+              =Table(
+                  { Key: "start",    Lbl: "1. เริ่มใช้งานครั้งแรก" },
+                  { Key: "filter",   Lbl: "2. ใช้ตัวกรอง" },
+                  { Key: "timeline", Lbl: "3. อ่านไทม์ไลน์" },
+                  { Key: "project",  Lbl: "4. สร้างโปรเจกต์ เฟส และงาน" },
+                  { Key: "board",    Lbl: "5. เปลี่ยนสถานะงาน" },
+                  { Key: "mine",     Lbl: "6. งานของฉัน" },
+                  { Key: "bau",      Lbl: "7. ข้อมูลอบรม BAU" },
+                  { Key: "perm",     Lbl: "8. ใครแก้อะไรได้" },
+                  { Key: "trouble",  Lbl: "9. แก้ปัญหาที่พบบ่อย" }
+              )
+          Children:
+            - btnTopic:
+                Control: Classic/Button
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =360
+                  Height: =uTap
+                  Text: =ThisItem.Lbl
+                  Align: =Align.Left
+                  PaddingLeft: =12
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =If(gblHelpTopic = ThisItem.Key, clrWhite, clrTextMain)
+                  Fill: =If(gblHelpTopic = ThisItem.Key, clrPrimary, clrSurface)
+                  HoverFill: =If(gblHelpTopic = ThisItem.Key, clrPrimaryDk, clrHover)
+                  BorderColor: =clrBorder
+                  BorderThickness: =1
+                  AccessibleLabel: ="อ่านหัวข้อ " & ThisItem.Lbl
+                  OnSelect: =Set(gblHelpTopic, ThisItem.Key)
+
+      - recHelpBody:
+          Control: Rectangle
+          Properties:
+            X: =uSidebarW + 392
+            Y: =uHeaderH + uPad
+            Width: =1366 - uSidebarW - 392 - uPad
+            Height: =768 - uHeaderH - (uPad * 2)
+            Fill: =clrSurface
+
+      - htmHelp:
+          Control: HtmlViewer
+          Properties:
+            X: =recHelpBody.X + 24
+            Y: =recHelpBody.Y + 16
+            Width: =recHelpBody.Width - 48
+            Height: =recHelpBody.Height - 32
+            Font: =fntMain
+            Size: =szBody
+            HtmlText: |
+              ="<div style='font-family:Segoe UI; font-size:18px; line-height:1.7; color:#121926'>" &
+               Switch(gblHelpTopic,
+
+                 "start",
+                 "<h2 style='font-size:24px'>เริ่มใช้งานครั้งแรก</h2>
+                  <ol>
+                  <li>เปิดแอปจากลิงก์ที่ได้รับ ถ้าถามเรื่องการอนุญาตให้เชื่อมต่อ กดปุ่ม <b>Allow</b></li>
+                  <li>ระบบจะตั้งตัวกรองแผนกให้เป็นแผนกของคุณเอง และช่วงเวลาเป็นเดือนปัจจุบัน</li>
+                  <li>ถ้าหน้าจอว่าง ให้กด <b>ล้างตัวกรอง</b> แล้วเลือก <b>ทุกแผนก</b></li>
+                  <li>เมนูทางซ้ายใช้สลับมุมมอง ตัวกรองด้านบนใช้ร่วมกันทุกมุมมอง</li>
+                  </ol>",
+
+                 "filter",
+                 "<h2 style='font-size:24px'>ใช้ตัวกรอง</h2>
+                  <p>ตัวกรองอยู่แถบบนและ<b>ใช้ร่วมกันทุกมุมมอง</b> เมื่อสลับหน้าจอ ค่าที่เลือกไว้จะยังอยู่</p>
+                  <ol>
+                  <li>เลือกช่วงเวลา: <b>รายสัปดาห์ / รายเดือน / รายไตรมาส</b> แล้วใช้ปุ่ม &lt; &gt; เลื่อนไปข้างหน้าหรือย้อนหลัง</li>
+                  <li>เลือกแผนก โปรเจกต์ (เลือกได้หลายอัน) เจ้าของ ผู้รับผิดชอบ และสถานะ</li>
+                  <li>ติ๊กประเภทรายการที่ต้องการเห็น: โปรเจกต์ เฟส งาน อบรม BAU</li>
+                  <li><b>กดปุ่ม ใช้ตัวกรอง</b> ทุกครั้ง ข้อมูลจะไม่เปลี่ยนจนกดปุ่มนี้</li>
+                  </ol>
+                  <p style='background:#FFF4E0;padding:12px'>ถ้าเห็นข้อความว่าข้อมูลถูกตัด ให้ลดช่วงเวลาให้สั้นลง
+                  เช่นเปลี่ยนจากรายไตรมาสเป็นรายเดือน</p>",
+
+                 "timeline",
+                 "<h2 style='font-size:24px'>อ่านไทม์ไลน์</h2>
+                  <ul>
+                  <li>แต่ละแถวคือรายการหนึ่ง เรียงเป็น <b>โปรเจกต์ &gt; เฟส &gt; งาน</b></li>
+                  <li>กดลูกศรหน้าชื่อเพื่อ<b>ย่อหรือขยาย</b>รายการย่อย</li>
+                  <li>แถบสีคือช่วงเวลาของรายการนั้น กดที่แถบเพื่อดูรายละเอียดด้านขวา</li>
+                  <li><b>เส้นสีแดงตั้ง</b> คือวันนี้</li>
+                  <li>แถบที่มี<b>ขอบแดงและไอคอนเตือน</b> คือเลยกำหนดแล้ว</li>
+                  <li>เลนล่างสุดคือ <b>อบรม BAU</b> สีของแถบแยกตามกลุ่มหลักสูตร</li>
+                  </ul>",
+
+                 "project",
+                 "<h2 style='font-size:24px'>สร้างโปรเจกต์ เฟส และงาน</h2>
+                  <ol>
+                  <li>ไปที่ไทม์ไลน์ กดปุ่ม <b>สร้างโปรเจกต์ใหม่</b></li>
+                  <li>กรอกชื่อโปรเจกต์แล้วกด <b>บันทึก</b> ระบบใส่แผนกของคุณให้เอง</li>
+                  <li>กด <b>เพิ่มเฟส</b> เลือกประเภทเฟส ใส่ชื่อ วันเริ่ม วันสิ้นสุด และผู้รับผิดชอบ</li>
+                  <li>ช่องผู้รับผิดชอบจะแสดงเฉพาะคนในแผนกของคุณ</li>
+                  <li>ในแต่ละเฟส กด <b>เพิ่มงาน</b> ระบบจะแนะนำงานมาตรฐานตามประเภทเฟส
+                      ติ๊กที่ต้องการแล้วกด <b>เพิ่มงานที่เลือก</b> หรือพิมพ์งานเองก็ได้</li>
+                  <li>วันเริ่มและวันสิ้นสุดของโปรเจกต์ ระบบคำนวณจากเฟสให้อัตโนมัติ แก้ด้วยมือไม่ได้</li>
+                  </ol>",
+
+                 "board",
+                 "<h2 style='font-size:24px'>เปลี่ยนสถานะงาน</h2>
+                  <ol>
+                  <li>ไปที่เมนู <b>กระดานงาน</b></li>
+                  <li>หาการ์ดงานที่ต้องการ</li>
+                  <li>กดปุ่ม <b>&gt;</b> เพื่อเลื่อนไปสถานะถัดไป หรือ <b>&lt;</b> เพื่อย้อนกลับ</li>
+                  </ol>
+                  <p>ลำดับสถานะ: ยังไม่เริ่ม &rarr; กำลังดำเนินการ &rarr; เสร็จแล้ว &rarr; ติดปัญหา</p>
+                  <p style='background:#FFF4E0;padding:12px'>ถ้าปุ่มเป็นสีเทากดไม่ได้ หมายความว่าคุณไม่ใช่
+                  ผู้สร้างโปรเจกต์นั้น ให้แจ้งผู้สร้างให้เปลี่ยนสถานะแทน</p>",
+
+                 "mine",
+                 "<h2 style='font-size:24px'>งานของฉัน</h2>
+                  <p>แสดงเฉพาะงานที่คุณถูกมอบหมาย และรอบอบรม BAU ที่คุณเป็นผู้รับผิดชอบหรือ LM</p>
+                  <ul>
+                  <li><b>เลยกำหนด</b> ต้องจัดการก่อน</li>
+                  <li><b>สัปดาห์นี้</b> วันจันทร์ถึงวันอาทิตย์ของสัปดาห์ปัจจุบัน</li>
+                  <li><b>หลังจากนี้</b> งานในอนาคต</li>
+                  </ul>",
+
+                 "bau",
+                 "<h2 style='font-size:24px'>ข้อมูลอบรม BAU</h2>
+                  <ul>
+                  <li>ข้อมูลมาจากระบบ <b>L&amp;D TMP</b> แอปนี้<b>อ่านอย่างเดียว</b> แก้ไขที่นี่ไม่ได้</li>
+                  <li>รายการที่ <b>ยกเลิก</b> ถูกซ่อนไว้ เปิดดูได้ด้วยสวิตช์ท้ายแถบตัวกรอง</li>
+                  <li>รายการที่ <b>รอยืนยัน</b> แสดงเป็นแถบขอบประ สีอ่อนกว่า</li>
+                  <li>ถ้าไม่เห็นข้อมูล BAU เลย อาจยังไม่มีสิทธิ์อ่านลิสต์ ให้แจ้งผู้ดูแลลิสต์</li>
+                  </ul>",
+
+                 "perm",
+                 "<h2 style='font-size:24px'>ใครแก้อะไรได้</h2>
+                  <table border='1' cellpadding='8' style='border-collapse:collapse'>
+                  <tr style='background:#002850;color:#FFFFFF'><th>สิ่งที่ทำ</th><th>ใครทำได้</th></tr>
+                  <tr><td>ดูไทม์ไลน์ทุกโปรเจกต์</td><td>ทุกคน</td></tr>
+                  <tr><td>สร้างโปรเจกต์ใหม่</td><td>ทุกคน</td></tr>
+                  <tr><td>แก้/ลบโปรเจกต์ เฟส งาน</td><td><b>ผู้สร้างโปรเจกต์นั้นเท่านั้น</b></td></tr>
+                  <tr><td>เปลี่ยนสถานะงาน</td><td>ผู้สร้างโปรเจกต์นั้นเท่านั้น</td></tr>
+                  <tr><td>แก้ทักษะและความสนใจ</td><td>ผู้ดูแลระบบเท่านั้น</td></tr>
+                  <tr><td>แก้ข้อมูลอบรม BAU</td><td>ไม่มีใครแก้ได้จากแอปนี้</td></tr>
+                  </table>
+                  <p>ผู้ที่ถูกมอบหมายงาน<b>ดูได้อย่างเดียว</b> แก้ไขไม่ได้ ซึ่งเป็นไปตามที่ออกแบบไว้</p>",
+
+                 "trouble",
+                 "<h2 style='font-size:24px'>แก้ปัญหาที่พบบ่อย</h2>
+                  <p><b>หน้าจอว่างเปล่า ไม่มีข้อมูล</b><br>
+                  กด <b>ล้างตัวกรอง</b> แล้วเลือก <b>ทุกแผนก</b> และขยายช่วงเวลาเป็นรายไตรมาส</p>
+                  <p><b>ขึ้นว่าโปรไฟล์ไม่มีข้อมูลแผนก</b><br>
+                  ฝ่ายไอทียังไม่ได้กรอกช่อง department ใน Microsoft 365 ให้คุณ
+                  ระหว่างนี้ใช้ <b>ทุกแผนก</b> ไปก่อนได้</p>
+                  <p><b>กดปุ่มแก้ไขไม่ได้</b><br>
+                  คุณไม่ใช่ผู้สร้างโปรเจกต์นั้น</p>
+                  <p><b>บันทึกแล้วขึ้นข้อความสีแดง</b><br>
+                  มักเกิดจากไม่มีสิทธิ์ที่ SharePoint หรือเน็ตหลุด ลองกดบันทึกอีกครั้ง
+                  ถ้ายังไม่ได้ให้แจ้งผู้ดูแลระบบพร้อมข้อความที่เห็น</p>
+                  <p><b>ไม่เห็นข้อมูลอบรม BAU</b><br>
+                  ต้องมีสิทธิ์ Read บนลิสต์ของ L&amp;D TMP ให้แจ้งผู้ดูแลลิสต์นั้น</p>
+                  <p><b>ขึ้นว่าข้อมูลถูกตัด</b><br>
+                  ช่วงเวลาที่เลือกมีรายการมากเกินไป ให้ลดช่วงเวลาหรือเลือกแผนกให้แคบลง</p>",
+
+                 ""
+               ) & "</div>"

@@ -1,0 +1,478 @@
+# =====================================================================
+# cmpFilters — แถบตัวกรองกลาง ใช้ร่วมกันทุกมุมมอง
+# ---------------------------------------------------------------------
+# ต้องเปิด Access app scope = On  (คอมโพเนนต์นี้เขียนตัวแปร global และเรียก data source)
+#
+# Custom properties
+#   ชื่อ        | Property type | Data type | ค่าเริ่มต้น
+#   ------------|---------------|-----------|------------
+#   OnApplied   | Behavior      | -         | (ว่าง)   ใช้ให้หน้าจอรู้ว่าข้อมูลโหลดใหม่แล้ว
+#
+# ขนาด: Width 1126, Height 176
+#
+# *** สำคัญ: btnApply.OnSelect ต้องมีเนื้อหาของ shared/LoadData.pafx.txt ทั้งไฟล์ ***
+#     ใน YAML นี้เขียนไว้เป็น  // << วาง LoadData ที่นี่ >>  เพื่อไม่ให้ไฟล์ยาวเกินไป
+#
+# การคงค่าตัวกรองเมื่อสลับมุมมอง: คอนโทรลทุกตัวอ่านค่าเริ่มต้นจากตัวแปร global
+# (Default / DefaultSelectedItems) ดังนั้นเมื่อย้ายหน้าจอแล้วกลับมา ค่าที่เลือกไว้ยังอยู่ครบ
+# =====================================================================
+ComponentDefinitions:
+  cmpFilters:
+    DefinitionType: CanvasComponent
+    Properties:
+      Height: =uFilterH
+      Width: =1366 - uSidebarW
+      Fill: =clrBg
+    CustomProperties:
+      OnApplied:
+        PropertyKind: Event
+        ReturnType: None
+    Children:
+
+      # ---------- บรรทัดที่ 1 : ช่วงเวลา ----------
+      - lblZoom:
+          Control: Label
+          Properties:
+            X: =uPad
+            Y: =8
+            Width: =90
+            Height: =uTap
+            Text: ="ช่วงเวลา"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+            VerticalAlign: =VerticalAlign.Middle
+
+      - galZoom:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =uPad + 94
+            Y: =8
+            Width: =390
+            Height: =uTap
+            TemplateSize: =130
+            TemplatePadding: =0
+            ShowScrollbar: =false
+            Items: =tblZoom
+          Children:
+            - btnZoom:
+                Control: Classic/Button
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =126
+                  Height: =uTap
+                  Text: =ThisItem.Label
+                  Font: =fntMain
+                  Size: =szBody
+                  Color: =If(gblZoom = ThisItem.Key, clrWhite, clrTextMain)
+                  Fill: =If(gblZoom = ThisItem.Key, clrPrimary, clrWhite)
+                  BorderColor: =If(gblZoom = ThisItem.Key, clrPrimary, clrBorder)
+                  BorderThickness: =2
+                  HoverFill: =If(gblZoom = ThisItem.Key, clrPrimaryDk, clrHover)
+                  AccessibleLabel: ="แสดงมุมมอง" & ThisItem.Label
+                  OnSelect: =Set(gblZoom, ThisItem.Key)
+
+      - btnPrev:
+          Control: Classic/Button
+          Properties:
+            X: =500
+            Y: =8
+            Width: =uTap
+            Height: =uTap
+            Text: ="<"
+            Font: =fntMain
+            Size: =szH3
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="ย้อนกลับหนึ่งช่วงเวลา"
+            OnSelect: |
+              =Set(gblAnchor,
+                  Switch(gblZoom,
+                      "Week",    DateAdd(gblAnchor, -7, TimeUnit.Days),
+                      "Month",   DateAdd(gblAnchor, -1, TimeUnit.Months),
+                      "Quarter", DateAdd(gblAnchor, -3, TimeUnit.Months)
+                  )
+               )
+
+      - dpAnchor:
+          Control: Classic/DatePicker
+          Properties:
+            X: =552
+            Y: =8
+            Width: =200
+            Height: =uTap
+            DefaultDate: =gblAnchor
+            Format: ="d mmm yyyy"
+            Language: ="en-US"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="วันอ้างอิงของช่วงเวลา"
+            OnChange: =Set(gblAnchor, dpAnchor.SelectedDate)
+
+      - btnNext:
+          Control: Classic/Button
+          Properties:
+            X: =760
+            Y: =8
+            Width: =uTap
+            Height: =uTap
+            Text: =">"
+            Font: =fntMain
+            Size: =szH3
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="ถัดไปหนึ่งช่วงเวลา"
+            OnSelect: |
+              =Set(gblAnchor,
+                  Switch(gblZoom,
+                      "Week",    DateAdd(gblAnchor, 7, TimeUnit.Days),
+                      "Month",   DateAdd(gblAnchor, 1, TimeUnit.Months),
+                      "Quarter", DateAdd(gblAnchor, 3, TimeUnit.Months)
+                  )
+               )
+
+      - btnToday:
+          Control: Classic/Button
+          Properties:
+            X: =816
+            Y: =8
+            Width: =110
+            Height: =uTap
+            Text: ="วันนี้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMain
+            Fill: =clrWhite
+            BorderColor: =clrBorder
+            BorderThickness: =2
+            AccessibleLabel: ="กลับไปช่วงเวลาปัจจุบัน"
+            OnSelect: =Set(gblAnchor, Today())
+
+      - btnApply:
+          Control: Classic/Button
+          Properties:
+            X: =Parent.Width - 200
+            Y: =8
+            Width: =180
+            Height: =uTap
+            Text: ="ใช้ตัวกรอง"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="ใช้ตัวกรองและโหลดข้อมูลใหม่"
+            OnSelect: |
+              =// 1) เก็บค่าจากคอนโทรลลงตัวแปร global
+               Set(gblDeptFilter,   Coalesce(ddDept.Selected.Value, txtAllDept));
+               ClearCollect(colSelProjects, ForAll(cboProjects.SelectedItems As s, { ProjectID: s.ID }));
+               Set(gblOwnerFilter,  Lower(Coalesce(ddOwner.Selected.Value, "")));
+               Set(gblPersonFilter, Lower(Coalesce(cboPerson.Selected.mail, "")));
+               Set(gblStatusFilter, Coalesce(ddStatus.Selected.Key, ""));
+               Set(gblShowProject,  chkProject.Value);
+               Set(gblShowPhase,    chkPhase.Value);
+               Set(gblShowTask,     chkTask.Value);
+               Set(gblShowBau,      chkBau.Value);
+               Set(gblCourseArea,   Coalesce(ddArea.Selected.Value, ""));
+               Set(gblLearningType, Coalesce(ddLearn.Selected.Value, ""));
+               Set(gblBauStatus,    Coalesce(ddBauStatus.Selected.Value, ""));
+               Set(gblShowCancelled, tglCancelled.Value);
+               // 2) โหลดข้อมูลใหม่ทั้งหมด
+               // << วางเนื้อหาทั้งหมดของ shared/LoadData.pafx.txt ตรงนี้ >>
+               // 3) บอกหน้าจอว่าเสร็จแล้ว
+               cmpFilters.OnApplied()
+
+      - btnReset:
+          Control: Classic/Button
+          Properties:
+            X: =Parent.Width - 356
+            Y: =8
+            Width: =148
+            Height: =uTap
+            Text: ="ล้างตัวกรอง"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrPrimary
+            Fill: =clrWhite
+            BorderColor: =clrPrimary
+            BorderThickness: =2
+            HoverFill: =clrHover
+            AccessibleLabel: ="ล้างตัวกรองทั้งหมดกลับเป็นค่าเริ่มต้น"
+            OnSelect: |
+              =Set(gblDeptFilter, If(gblDeptMissing, txtAllDept, gblUserDept));
+               Clear(colSelProjects);
+               Set(gblOwnerFilter, "");  Set(gblPersonFilter, "");  Set(gblStatusFilter, "");
+               Set(gblShowProject, true); Set(gblShowPhase, true);
+               Set(gblShowTask, true);    Set(gblShowBau, true);
+               Set(gblCourseArea, "");    Set(gblLearningType, "");  Set(gblBauStatus, "");
+               Set(gblShowCancelled, false);
+               Set(gblZoom, "Month");     Set(gblAnchor, Today());
+               Reset(ddDept); Reset(cboProjects); Reset(ddOwner); Reset(cboPerson);
+               Reset(ddStatus); Reset(ddArea); Reset(ddLearn); Reset(ddBauStatus);
+               Reset(chkProject); Reset(chkPhase); Reset(chkTask); Reset(chkBau);
+               Reset(tglCancelled);
+               Select(btnApply)
+
+      # ---------- บรรทัดที่ 2 : ตัวกรองหลัก ----------
+      - ddDept:
+          Control: Classic/DropDown
+          Properties:
+            X: =uPad
+            Y: =60
+            Width: =210
+            Height: =uTap
+            Items: |
+              =Ungroup(
+                  Table(
+                      { T: Table({ Value: txtAllDept, Label: "ทุกแผนก" }) },
+                      { T: ForAll(colDeptOptions As d, { Value: d.Value, Label: d.Value }) }
+                  ),
+                  "T"
+               )
+            Value: ="Label"
+            Default: =If(gblDeptFilter = txtAllDept, "ทุกแผนก", gblDeptFilter)
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามแผนก"
+
+      - cboProjects:
+          Control: Classic/ComboBox
+          Properties:
+            X: =uPad + 218
+            Y: =60
+            Width: =260
+            Height: =uTap
+            Items: =colProjectLookup
+            DisplayFields: =["Title"]
+            SearchFields: =["Title"]
+            SelectMultiple: =true
+            DefaultSelectedItems: =Filter(colProjectLookup As p, !IsBlank(LookUp(colSelProjects, ProjectID = p.ID)))
+            InputTextPlaceholder: ="ทุกโปรเจกต์"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="เลือกโปรเจกต์ เลือกได้หลายรายการ"
+
+      - ddOwner:
+          Control: Classic/DropDown
+          Properties:
+            X: =uPad + 486
+            Y: =60
+            Width: =220
+            Height: =uTap
+            Items: |
+              =Ungroup(
+                  Table(
+                      { T: Table({ Value: "" }) },
+                      { T: SortByColumns(Distinct(colProjectLookup, Lower(OwnerEmail)), "Value", SortOrder.Ascending) }
+                  ),
+                  "T"
+               )
+            Value: ="Value"
+            Default: =gblOwnerFilter
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามเจ้าของโปรเจกต์"
+
+      - cboPerson:
+          Control: Classic/ComboBox
+          Properties:
+            X: =uPad + 714
+            Y: =60
+            Width: =260
+            Height: =uTap
+            Items: |
+              =Filter(
+                  Office365Users.SearchUserV2({ searchTerm: cboPerson.SearchText, top: 15 }).value,
+                  gblDeptFilter = txtAllDept || department = gblDeptFilter
+               )
+            DisplayFields: =["displayName"]
+            SearchFields: =["displayName"]
+            SelectMultiple: =false
+            InputTextPlaceholder: ="ทุกคน"
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามผู้รับผิดชอบ"
+
+      - ddStatus:
+          Control: Classic/DropDown
+          Properties:
+            X: =uPad + 982
+            Y: =60
+            Width: =200
+            Height: =uTap
+            Items: |
+              =Ungroup(
+                  Table(
+                      { T: Table({ Key: "", Label: "ทุกสถานะ" }) },
+                      { T: ShowColumns(SortByColumns(tblStatus, "Seq", SortOrder.Ascending), "Key", "Label") }
+                  ),
+                  "T"
+               )
+            Value: ="Label"
+            Default: =Coalesce(LookUp(tblStatus, Key = gblStatusFilter, Label), "ทุกสถานะ")
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามสถานะ"
+
+      # ---------- บรรทัดที่ 3 : ประเภทรายการ + ตัวกรองเฉพาะ BAU ----------
+      - lblTypes:
+          Control: Label
+          Properties:
+            X: =uPad
+            Y: =116
+            Width: =76
+            Height: =uTap
+            Text: ="ประเภท"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+            VerticalAlign: =VerticalAlign.Middle
+
+      - chkProject:
+          Control: Classic/CheckBox
+          Properties:
+            X: =uPad + 80
+            Y: =116
+            Width: =120
+            Height: =uTap
+            Text: ="โปรเจกต์"
+            Default: =gblShowProject
+            Font: =fntMain
+            Size: =szBody
+
+      - chkPhase:
+          Control: Classic/CheckBox
+          Properties:
+            X: =uPad + 204
+            Y: =116
+            Width: =90
+            Height: =uTap
+            Text: ="เฟส"
+            Default: =gblShowPhase
+            Font: =fntMain
+            Size: =szBody
+
+      - chkTask:
+          Control: Classic/CheckBox
+          Properties:
+            X: =uPad + 298
+            Y: =116
+            Width: =90
+            Height: =uTap
+            Text: ="งาน"
+            Default: =gblShowTask
+            Font: =fntMain
+            Size: =szBody
+
+      - chkBau:
+          Control: Classic/CheckBox
+          Properties:
+            X: =uPad + 392
+            Y: =116
+            Width: =130
+            Height: =uTap
+            Text: ="อบรม BAU"
+            Default: =gblShowBau
+            Font: =fntMain
+            Size: =szBody
+
+      - ddArea:
+          Control: Classic/DropDown
+          Properties:
+            X: =uPad + 530
+            Y: =116
+            Width: =180
+            Height: =uTap
+            Visible: =chkBau.Value
+            Items: |
+              =Ungroup(
+                  Table(
+                      { T: Table({ Value: "" }) },
+                      { T: colCourseAreas }
+                  ),
+                  "T"
+               )
+            Value: ="Value"
+            Default: =gblCourseArea
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามกลุ่มหลักสูตร BAU"
+
+      - ddLearn:
+          Control: Classic/DropDown
+          Properties:
+            X: =uPad + 718
+            Y: =116
+            Width: =180
+            Height: =uTap
+            Visible: =chkBau.Value
+            Items: |
+              =Ungroup(
+                  Table(
+                      { T: Table({ Value: "" }) },
+                      { T: colLearningTypes }
+                  ),
+                  "T"
+               )
+            Value: ="Value"
+            Default: =gblLearningType
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามรูปแบบการเรียน BAU"
+
+      - ddBauStatus:
+          Control: Classic/DropDown
+          Properties:
+            X: =uPad + 906
+            Y: =116
+            Width: =170
+            Height: =uTap
+            Visible: =chkBau.Value
+            Items: |
+              =Ungroup(
+                  Table(
+                      { T: Table({ Value: "" }) },
+                      { T: colBauStatuses }
+                  ),
+                  "T"
+               )
+            Value: ="Value"
+            Default: =gblBauStatus
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="กรองตามสถานะของอบรม BAU"
+
+      - tglCancelled:
+          Control: Classic/Toggle
+          Properties:
+            X: =uPad + 1084
+            Y: =116
+            Width: =60
+            Height: =uTap
+            Visible: =chkBau.Value
+            Default: =gblShowCancelled
+            Font: =fntMain
+            Size: =szBody
+            AccessibleLabel: ="แสดงรายการอบรมที่ยกเลิก"
+
+      - lblCancelled:
+          Control: Label
+          Properties:
+            X: =uPad + 1148
+            Y: =116
+            Width: =160
+            Height: =uTap
+            Visible: =chkBau.Value
+            Text: ="แสดงรายการยกเลิก"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrTextMuted
+            VerticalAlign: =VerticalAlign.Middle

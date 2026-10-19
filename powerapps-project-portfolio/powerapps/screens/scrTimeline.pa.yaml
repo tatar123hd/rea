@@ -1,0 +1,436 @@
+# =====================================================================
+# scrTimeline — มุมมองหลัก: ไทม์ไลน์แบบ Gantt ด้วย gallery
+# ---------------------------------------------------------------------
+# โครงหน้าจอ (1366 x 768)
+#   X 0..240      แถบเมนู
+#   X 240..1366   เนื้อหา
+#     Y 0..72     หัวหน้าจอ
+#     Y 72..248   แถบตัวกรอง
+#     Y 248..288  แถบเตือน (ซ่อนได้)
+#     Y ..  ..    ไม้บรรทัดวันที่ 40 px
+#     ที่เหลือ    gallery ไทม์ไลน์
+#
+# คอมโพเนนต์ที่ต้องวางไว้ก่อน: cmpSidebar, cmpHeader, cmpFilters, cmpTimelineBar,
+#                              cmpDetailPanel, cmpConfirm
+# =====================================================================
+Screens:
+  scrTimeline:
+    Properties:
+      Fill: =clrBg
+      OnVisible: |
+        =Set(gblView, "Timeline");
+         Set(gblTrackW, 1366 - uSidebarW - uLaneW - 40)
+    Children:
+
+      - cmpSidebar_1:
+          Control: Component
+          ComponentName: cmpSidebar
+          Properties:
+            X: =0
+            Y: =0
+            ActiveView: ="Timeline"
+            OnNav: |
+              =Switch(gblNavTarget,
+                  "Timeline",  Navigate(scrTimeline),
+                  "Dashboard", Navigate(scrDashboard),
+                  "Board",     Navigate(scrBoard),
+                  "Table",     Navigate(scrTable),
+                  "Calendar",  Navigate(scrCalendar),
+                  "MyTasks",   Navigate(scrMyTasks),
+                  "Skills",    Navigate(scrSkills),
+                  "Help",      Navigate(scrHelp),
+                  "Admin",     Navigate(scrAdmin)
+               )
+
+      - cmpHeader_1:
+          Control: Component
+          ComponentName: cmpHeader
+          Properties:
+            X: =uSidebarW
+            Y: =0
+            TitleText: ="ไทม์ไลน์"
+            SubtitleText: |
+              =Text(gblWinStartD, "d mmm yyyy", "en-US") & " ถึง " &
+               Text(gblWinEndD, "d mmm yyyy", "en-US") & "  ·  " &
+               Text(CountRows(colTimelineVisible)) & " แถว"
+            OnRefresh: =Select(btnApplyProxy)
+
+      - cmpFilters_1:
+          Control: Component
+          ComponentName: cmpFilters
+          Properties:
+            X: =uSidebarW
+            Y: =uHeaderH
+            OnApplied: =Set(gblToast, "โหลดข้อมูลใหม่เรียบร้อยแล้ว"); Set(gblToastIsError, false)
+
+      - btnNewProject:
+          Control: Classic/Button
+          Properties:
+            X: =1366 - 400
+            Y: =14
+            Width: =200
+            Height: =uTap
+            Text: ="สร้างโปรเจกต์ใหม่"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrWhite
+            Fill: =clrPrimary
+            HoverFill: =clrPrimaryDk
+            BorderThickness: =0
+            AccessibleLabel: ="สร้างโปรเจกต์ใหม่"
+            OnSelect: |
+              =Set(gblEditProjectID, 0);
+               Set(gblDetailOpen, false);
+               Navigate(scrProject)
+
+      # ปุ่มซ่อนไว้ ใช้ให้ปุ่ม "รีเฟรช" บนหัวหน้าจอเรียกการโหลดเดิมซ้ำได้
+      - btnApplyProxy:
+          Control: Classic/Button
+          Properties:
+            X: =-200
+            Y: =-200
+            Width: =1
+            Height: =1
+            Visible: =false
+            Text: =""
+            OnSelect: =Select(cmpFilters_1)
+
+      # ---------- แถบเตือน ----------
+      - recBanner:
+          Control: Rectangle
+          Properties:
+            Visible: =gblTruncated || !gblBauReadable || gblDeptMissing
+            X: =uSidebarW
+            Y: =uHeaderH + uFilterH
+            Width: =1366 - uSidebarW
+            Height: =40
+            Fill: =clrWarnBg
+
+      - lblBanner:
+          Control: Label
+          Properties:
+            Visible: =recBanner.Visible
+            X: =uSidebarW + uPad
+            Y: =recBanner.Y
+            Width: =recBanner.Width - (uPad * 2)
+            Height: =40
+            Text: |
+              =Concat(
+                  Filter(
+                      Table(
+                          { M: If(gblTruncated, "ข้อมูลถูกตัดเพราะมีจำนวนแถวมากเกินไป กรุณาลดช่วงวันที่หรือเลือกแผนกให้แคบลง", "") },
+                          { M: If(!gblBauReadable, "ไม่สามารถอ่านข้อมูลอบรม BAU ได้ กรุณาติดต่อผู้ดูแลลิสต์เพื่อขอสิทธิ์ Read", "") },
+                          { M: If(gblDeptMissing, "โปรไฟล์ของคุณไม่มีข้อมูลแผนก ระบบจึงแสดงทุกแผนกไว้ก่อน", "") }
+                      ),
+                      M <> ""
+                  ),
+                  M,
+                  "   |   "
+               )
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWarnText
+            VerticalAlign: =VerticalAlign.Middle
+
+      # ---------- ไม้บรรทัดวันที่ ----------
+      - lblLaneHead:
+          Control: Label
+          Properties:
+            X: =uSidebarW
+            Y: =recBanner.Y + If(recBanner.Visible, 40, 0)
+            Width: =uLaneW
+            Height: =40
+            Text: ="รายการ"
+            Font: =fntMain
+            Size: =szBody
+            FontWeight: =FontWeight.Semibold
+            Color: =clrTextMuted
+            Fill: =clrSurface
+            PaddingLeft: =uPad
+            VerticalAlign: =VerticalAlign.Middle
+
+      - galTicks:
+          Control: Gallery
+          Variant: galleryHorizontal
+          Properties:
+            X: =uSidebarW + uLaneW
+            Y: =lblLaneHead.Y
+            Width: =gblTrackW
+            Height: =40
+            TemplateSize: =gblTrackW / Max(CountRows(colTicks), 1)
+            TemplatePadding: =0
+            ShowScrollbar: =false
+            Items: =colTicks
+          Children:
+            - lblTick:
+                Control: Label
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =40
+                  Text: =ThisItem.Label
+                  Font: =fntMain
+                  Size: =szTick
+                  Color: =clrTextMuted
+                  Fill: =clrSurface
+                  Align: =Align.Center
+                  VerticalAlign: =VerticalAlign.Middle
+            - recTickLine:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =1
+                  Height: =40
+                  Fill: =clrBorder
+
+      # ---------- เส้น "วันนี้" ----------
+      - recToday:
+          Control: Rectangle
+          Properties:
+            Visible: =gblToday >= gblWinStart && gblToday <= gblWinEnd
+            X: |
+              =uSidebarW + uLaneW +
+               RoundDown(DateDiff(gblWinStartD, Today(), TimeUnit.Days) / Max(gblWinDays, 1) * gblTrackW, 0)
+            Y: =lblLaneHead.Y + 40
+            Width: =3
+            Height: =768 - (lblLaneHead.Y + 40)
+            Fill: =clrOverdue
+
+      - lblTodayTag:
+          Control: Label
+          Properties:
+            Visible: =recToday.Visible
+            X: =recToday.X - 24
+            Y: =lblLaneHead.Y + 4
+            Width: =56
+            Height: =30
+            Text: ="วันนี้"
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =clrOverdue
+            Align: =Align.Center
+            VerticalAlign: =VerticalAlign.Middle
+
+      # ---------- ไทม์ไลน์ ----------
+      - galTimeline:
+          Control: Gallery
+          Variant: galleryVertical
+          Properties:
+            X: =uSidebarW
+            Y: =lblLaneHead.Y + 40
+            Width: =1366 - uSidebarW
+            Height: =768 - (lblLaneHead.Y + 40)
+            TemplateSize: =uRow
+            TemplatePadding: =0
+            ShowScrollbar: =true
+            Items: =colTimelineVisible
+          Children:
+            - recRowBg:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =uRow
+                  Fill: |
+                    =Switch(ThisItem.Level,
+                        0, ColorValue("#E9EEF7"),
+                        1, clrSurface,
+                        ColorValue("#FBFCFE"))
+
+            - recRowLine:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =uRow - 1
+                  Width: =Parent.TemplateWidth
+                  Height: =1
+                  Fill: =clrBorder
+
+            - icoToggle:
+                Control: Classic/Icon
+                Properties:
+                  Visible: =ThisItem.HasKids
+                  Icon: =If(IsBlank(LookUp(colCollapsed, Key = ThisItem.Key)), Icon.ChevronDown, Icon.ChevronRight)
+                  X: =8 + (ThisItem.Level * 20)
+                  Y: =10
+                  Width: =24
+                  Height: =24
+                  Color: =clrTextMain
+                  AccessibleLabel: |
+                    =If(IsBlank(LookUp(colCollapsed, Key = ThisItem.Key)),
+                        "ย่อรายการย่อยของ " & ThisItem.Title,
+                        "ขยายรายการย่อยของ " & ThisItem.Title)
+                  OnSelect: |
+                    =If(IsBlank(LookUp(colCollapsed, Key = ThisItem.Key)),
+                         Collect(colCollapsed, { Key: ThisItem.Key }),
+                         RemoveIf(colCollapsed, Key = ThisItem.Key)
+                     );
+                     ClearCollect(colTimelineVisible,
+                         SortByColumns(
+                             Filter(colTimelineAll As r,
+                                 r.Level = 0
+                                 || (r.Level = 1 && IsBlank(LookUp(colCollapsed, Key = r.ParentKey)))
+                                 || (r.Level = 2
+                                     && IsBlank(LookUp(colCollapsed, Key = r.ParentKey))
+                                     && IsBlank(LookUp(colCollapsed, Key = r.RootKey)))
+                             ),
+                             "SortKey", SortOrder.Ascending
+                         )
+                     )
+
+            - lblRowTitle:
+                Control: Label
+                Properties:
+                  X: =36 + (ThisItem.Level * 20)
+                  Y: =0
+                  Width: =uLaneW - 44 - (ThisItem.Level * 20)
+                  Height: =uRow
+                  Text: =ThisItem.Title
+                  Font: =fntMain
+                  Size: =szBody
+                  FontWeight: =If(ThisItem.Level = 0, FontWeight.Semibold, FontWeight.Normal)
+                  Color: =clrTextMain
+                  VerticalAlign: =VerticalAlign.Middle
+
+            - cmpTimelineBar_1:
+                Control: Component
+                ComponentName: cmpTimelineBar
+                Properties:
+                  X: =uLaneW
+                  Y: =0
+                  BarStart: =ThisItem.BarStart
+                  BarEnd: =ThisItem.BarEnd
+                  WinStart: =gblWinStart
+                  WinDays: =gblWinDays
+                  TrackWidth: =gblTrackW
+                  BarColor: =ThisItem.BarColor
+                  IsOverdue: =ThisItem.IsOverdue
+                  IsDim: =ThisItem.ItemType = "BAU" && ThisItem.AreaText = "รอยืนยัน"
+                  LabelText: =If(ThisItem.Level = 0, "", ThisItem.Title)
+                  OnSelectBar: |
+                    =// << วางเนื้อหาของ shared/OpenDetail.pafx.txt ตรงนี้ >>
+                     Set(gblDetailOpen, true)
+
+      - lblEmpty:
+          Control: Label
+          Properties:
+            Visible: =IsEmpty(colTimelineVisible) && !gblBusy
+            X: =uSidebarW + uLaneW
+            Y: =galTimeline.Y + 60
+            Width: =gblTrackW
+            Height: =120
+            Text: |
+              ="ไม่พบรายการในช่วงเวลานี้" & Char(10) &
+               "ลองขยายช่วงเวลา เปลี่ยนเป็น ""ทุกแผนก"" หรือกดปุ่ม ""ล้างตัวกรอง"""
+            Font: =fntMain
+            Size: =szH3
+            Color: =clrTextMuted
+            Align: =Align.Center
+
+      - lblBusy:
+          Control: Label
+          Properties:
+            Visible: =gblBusy
+            X: =uSidebarW + uLaneW
+            Y: =galTimeline.Y + 60
+            Width: =gblTrackW
+            Height: =60
+            Text: ="กำลังโหลดข้อมูล..."
+            Font: =fntMain
+            Size: =szH3
+            Color: =clrTextMuted
+            Align: =Align.Center
+
+      - cmpDetailPanel_1:
+          Control: Component
+          ComponentName: cmpDetailPanel
+          Properties:
+            Visible: =gblDetailOpen
+            X: =1366 - 440
+            Y: =0
+            OnEdit: |
+              =Set(gblEditProjectID, gblDetailRow.ProjectID);
+               Set(gblEditType, gblDetailRow.ItemType);
+               Set(gblEditID, gblDetailRow.ItemID);
+               Set(gblDetailOpen, false);
+               Navigate(scrProject)
+            OnDelete: |
+              =Set(gblConfirmAction, "DeleteDetail");
+               Set(gblConfirmTitle,
+                   Switch(gblDetailRow.ItemType,
+                       "Project", "ลบโปรเจกต์นี้?",
+                       "Phase",   "ลบเฟสนี้?",
+                       "ลบงานนี้?"));
+               Set(gblConfirmBody,
+                   Switch(gblDetailRow.ItemType,
+                       "Project",
+                           "จะลบ """ & gblDetailRow.Title & """ พร้อมเฟส " &
+                           Text(CountRows(Filter(Phases, ProjectID = gblDetailRow.ItemID))) & " รายการ และงาน " &
+                           Text(CountRows(Filter(Tasks, ProjectID = gblDetailRow.ItemID))) & " รายการ" & Char(10) &
+                           "การลบนี้ย้อนกลับไม่ได้",
+                       "Phase",
+                           "จะลบ """ & gblDetailRow.Title & """ พร้อมงานในเฟสนี้ " &
+                           Text(CountRows(Filter(Tasks, PhaseID = gblDetailRow.ItemID))) & " รายการ" & Char(10) &
+                           "การลบนี้ย้อนกลับไม่ได้",
+                       "จะลบงาน """ & gblDetailRow.Title & """" & Char(10) & "การลบนี้ย้อนกลับไม่ได้"));
+               Set(gblConfirmOpen, true)
+
+      - cmpConfirm_1:
+          Control: Component
+          ComponentName: cmpConfirm
+          Properties:
+            X: =0
+            Y: =0
+            IsOpen: =gblConfirmOpen
+            TitleText: =gblConfirmTitle
+            BodyText: =gblConfirmBody
+            ConfirmText: ="ลบถาวร"
+            OnCancel: =Set(gblConfirmOpen, false)
+            OnConfirm: |
+              =// ลบลูกก่อนเสมอ เพราะ SharePoint ไม่มี cascade delete
+               If(gblDetailRow.ItemType = "Project",
+                   RemoveIf(Tasks,  ProjectID = gblDetailRow.ItemID);
+                   RemoveIf(Phases, ProjectID = gblDetailRow.ItemID);
+                   Remove(Projects, LookUp(Projects, ID = gblDetailRow.ItemID)),
+               If(gblDetailRow.ItemType = "Phase",
+                   RemoveIf(Tasks, PhaseID = gblDetailRow.ItemID);
+                   Remove(Phases, LookUp(Phases, ID = gblDetailRow.ItemID));
+                   // ปรับวันเริ่ม/สิ้นสุดของโปรเจกต์ใหม่หลังลบเฟส
+                   Set(gblRollupID, gblDetailRow.ProjectID);
+                   Patch(Projects, LookUp(Projects, ID = gblRollupID),
+                       {
+                           StartDate: First(SortByColumns(Filter(Phases, ProjectID = gblRollupID), "StartDate", SortOrder.Ascending)).StartDate,
+                           EndDate:   First(SortByColumns(Filter(Phases, ProjectID = gblRollupID), "EndDate",   SortOrder.Descending)).EndDate
+                       }),
+                   Remove(Tasks, LookUp(Tasks, ID = gblDetailRow.ItemID))
+               ));
+               Set(gblConfirmOpen, false);
+               Set(gblDetailOpen, false);
+               If(IsEmpty(Errors(Projects)) && IsEmpty(Errors(Phases)) && IsEmpty(Errors(Tasks)),
+                   Set(gblToast, "ลบเรียบร้อยแล้ว"); Set(gblToastIsError, false),
+                   Set(gblToast, "ลบไม่สำเร็จ อาจเป็นเพราะคุณไม่ใช่ผู้สร้างรายการนี้"); Set(gblToastIsError, true)
+               );
+               Select(btnApplyProxy)
+
+      - lblToast:
+          Control: Label
+          Properties:
+            Visible: =!IsBlank(gblToast)
+            X: =uSidebarW + 24
+            Y: =768 - 76
+            Width: =560
+            Height: =52
+            Text: =gblToast
+            Font: =fntMain
+            Size: =szBody
+            Color: =clrWhite
+            Fill: =If(gblToastIsError, clrStBlocked, clrStDone)
+            PaddingLeft: =uPad
+            VerticalAlign: =VerticalAlign.Middle
+            OnSelect: =Set(gblToast, "")
+            AccessibleLabel: =gblToast & " แตะเพื่อปิดข้อความ"
